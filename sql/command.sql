@@ -1,0 +1,1 @@
+DROP TABLE designs; CREATE TABLE IF NOT EXISTS designs ( id TEXT PRIMARY KEY NOT NULL, user_auth0_id TEXT NOT NULL, name TEXT, created_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now')), current_state BLOB, history_stack BLOB, aspect_ratio REAL NOT NULL DEFAULT 1.5, FOREIGN KEY (user_auth0_id) REFERENCES users (auth0_id) ON DELETE CASCADE ) STRICT;

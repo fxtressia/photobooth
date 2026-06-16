@@ -8,5 +8,9 @@ export default defineConfig({
     alias: {
       "~": path.resolve(__dirname, "./src"),
     }
-  }
+  },
+  optimizeDeps: {
+    exclude: ['linked-dep', '@layerhub-io/react', '@layerhub-io/core'],
+    include: ['baseui', ],
+  },
 });

@@ -1,6 +1,6 @@
 import React from "react"
 import { styled, ThemeProvider, DarkTheme } from "baseui"
-import { Theme } from "baseui/theme"
+import type { Theme } from "baseui/theme"
 import { Button, KIND } from "baseui/button"
 import Logo from "~/components/Icons/Logo"
 import useDesignEditorContext from "~/hooks/useDesignEditorContext"

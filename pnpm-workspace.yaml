@@ -1,9 +1,0 @@
-packages:
-  - web
-allowBuilds:
-  baseui: false
-  canvas: false
-  core-js: false
-  esbuild: true
-  sharp: false
-  workerd: true

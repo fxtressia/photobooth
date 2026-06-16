@@ -1,8 +1,8 @@
 import { Hono } from 'hono'
 
-const app = new Hono()
 import { auth0, requiresAuth, getUser } from '@auth0/auth0-hono'
 import { monotonicFactory } from "ulidx";
+const app = new Hono()
 
 const ulid = monotonicFactory();
 // Add auth to every route
@@ -24,27 +24,27 @@ app.use('*', auth0({
 
 }))
 
-app.get('/', (c) => {
+app.get('/api/', (c) => {
   return c.text('Hello Hono!')
 })
 
-app.get('/me', (c) => {
+app.get('/api/me', (c) => {
   const user = getUser(c);
   return c.json(user);
 
 })
 
-app.get('/me/home', (c) => {
+app.get('/api/me/home', (c) => {
   const user = getUser(c);
   return c.json({ message: `Welcome back, ${user.name}!` });
 });
 
-app.get('/me/designs', async (c) => {
+app.get('/api/me/designs', async (c) => {
   const user = getUser(c);
   const { results }= await c.env.DB.prepare("select * from designs where user_auth0_id = ?").bind(user.sub).all();
   return c.json(results);
 })
-app.get('/me/designs/:id', async (c) => {
+app.get('/api/me/designs/:id', async (c) => {
   const user = getUser(c);
   const id = c.req.param('id');
   const format = c.req.query('format') || '';
@@ -71,7 +71,7 @@ if (format == "fd") {
  
 })
 
-app.post('/me/designs/new', async (c) => {
+app.post('/api/me/designs/new', async (c) => {
   const user = getUser(c);
   const { aspect_ratio } = await c.req.json();
   const id = ulid();
@@ -79,7 +79,7 @@ app.post('/me/designs/new', async (c) => {
   return c.json({ id });
 })
 
-app.patch('/me/designs/:id', async (c) => {
+app.patch('/api/me/designs/:id', async (c) => {
   const user = getUser(c);
   const id = c.req.param('id');
   const data = await c.req.formData();
@@ -93,13 +93,13 @@ app.patch('/me/designs/:id', async (c) => {
   return c.json({ message: "Design updated" });
 })
 
-app.get('/me/sessions', async (c) => {
+app.get('/api/me/sessions', async (c) => {
   const user = getUser(c);
   const sessions = await c.env.DB.prepare("select * from sessions where user_auth0_id = ?").bind(user.sub).all();
   return c.json(sessions);
 })
 
-app.post('/me/sessions/new', async (c) => {
+app.post('/api/me/sessions/new', async (c) => {
   const user = getUser(c);
   const { location, images_count } = await c.req.json();
   const id = ulid();
@@ -107,11 +107,12 @@ app.post('/me/sessions/new', async (c) => {
   return c.json({ id });
 })
 
-app.post('/me/designs/:id/order', async (c) => {
+app.post('/api/me/designs/:id/order', async (c) => {
   const user = getUser(c);
   const designId = c.req.param('id');
   return c.json({ message: `Order placed for design ${designId} by user ${user.name}` });
 })
+
 
 
 export default app

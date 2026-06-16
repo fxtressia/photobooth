@@ -2,18 +2,36 @@
   "name": "photobooth-backend",
   "type": "module",
   "scripts": {
-    "dev": "wrangler dev",
-    "deploy": "wrangler deploy --minify",
+    "dev": "vite --port 8787",
+    "vite:build": "tsc -b && vite build",
+    "lint": "eslint .",
+    "vite:preview": "vite preview",
+    "cf:dev": "wrangler dev",
+    "cf:deploy": "wrangler deploy --minify",
     "type-gen": "wrangler types --env-interface CloudflareBindings",
-      "type-check": "pnpm run type-gen && tsc --noEmit"
+    "type-check": "pnpm run type-gen && tsc --noEmit"
   },
   "dependencies": {
     "@auth0/auth0-hono": "^2.0.0-beta.0",
     "hono": "^4.12.25",
+    "react": "^19.2.6",
+    "react-dom": "^19.2.6",
     "ulidx": "^2.4.1"
   },
   "devDependencies": {
-    "@types/node": "^25.9.3",
-    "wrangler": "^4.4.0"
+    "@cloudflare/vite-plugin": "^1.40.2",
+    "@eslint/js": "^10.0.1",
+    "@types/node": "^24.12.3",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^6.0.1",
+    "eslint": "^10.3.0",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "eslint-plugin-react-refresh": "^0.5.2",
+    "globals": "^17.6.0",
+    "typescript": "~6.0.2",
+    "typescript-eslint": "^8.59.2",
+    "vite": "^8.0.12",
+    "wrangler": "^4.100.0"
   }
 }

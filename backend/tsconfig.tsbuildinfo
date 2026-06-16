@@ -1,0 +1,1 @@
+{"root":["./vite.config.ts","./worker-configuration.d.ts","./src/App.tsx","./src/main.tsx","./src/backend/index.ts"],"errors":true,"version":"6.0.3"}

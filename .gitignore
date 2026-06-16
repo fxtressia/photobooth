@@ -9,7 +9,7 @@ lerna-debug.log*
 
 **/*/.vite
 # Build output
-**/*/*.js
+**/*/src/**/*.js
 
 node_modules
 dist

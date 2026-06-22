@@ -17,7 +17,7 @@
     "directory": "./dist/",
     "not_found_handling": "single-page-application",
     "binding": "ASSETS",
-    "run_worker_first": ["/api/*", "/auth/*"]
+    "run_worker_first": ["/", "/admin/*", "/admin", "/faq", "/pay", "/api/*", "/auth/*"]
   }
   // "vars": {
   //   "MY_VAR": "my-variable"

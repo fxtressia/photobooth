@@ -1,6 +1,11 @@
 # prod
 dist/
 
+
+#brand
+src/views/Payment/brand.tsx
+src/config/*.json
+
 # dev
 .yarn/
 !.yarn/releases
@@ -10,7 +15,8 @@ dist/
 .idea/workspace.xml
 .idea/usage.statistics.xml
 .idea/shelf
-
+src/config.ts
+public/images/
 # deps
 node_modules/
 .wrangler

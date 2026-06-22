@@ -1,0 +1,9 @@
+{ 
+    "venues":{
+        "0":{
+            "name":"Smansa Edu Fair @ SMA N 1 Purwokerto",
+            "id":"0",
+            "server":"https://smansa.photoboothproject.dev"
+        }
+    }
+}

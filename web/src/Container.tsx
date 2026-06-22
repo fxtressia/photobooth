@@ -72,10 +72,11 @@ const Container = ({ children }: { children: React.ReactNode }) => {
     <div
       ref={containerRef}
       style={{
-        flex: 1,
-        display: "flex",
-        height: "100vh",
-        width: "100vw",
+      
+      
+   
+     //   width: "100vw",
+     //minHeight: "100%",
       }}
     >
       {children}

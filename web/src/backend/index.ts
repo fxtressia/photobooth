@@ -1,12 +1,26 @@
-import { Hono } from 'hono'
+import { Context, Hono } from 'hono'
 
-import { auth0, requiresAuth, getUser } from '@auth0/auth0-hono'
+import { auth0, requiresAuth, getUser, claimEquals } from '@auth0/auth0-hono'
 import { monotonicFactory } from "ulidx";
+import { admins } from "~/config";
+import ssr from './ssr';
+import home_feed from './home_feed';
+import adminFeed from './admin_feed';
 const app = new Hono()
-
+if (typeof globalThis !== 'undefined' && !('document' in globalThis)) {
+  Object.defineProperty(globalThis, 'document', {
+    get() {
+      const err = new Error('Capture Stack Trace');
+      console.error('!!! CAUGHT DOCUMENT ACCESS HERE !!!', err.stack);
+      throw new ReferenceError('document is not defined');
+    },
+    configurable: true
+  });
+}
 const ulid = monotonicFactory();
 // Add auth to every route
 app.use('*', auth0({
+  authRequired: false,
   clientID: process.env.AUTH0_CLIENT_ID,
   clientSecret: process.env.AUTH0_CLIENT_SECRET,
   baseURL: process.env.APP_BASE_URL,
@@ -24,24 +38,43 @@ app.use('*', auth0({
 
 }))
 
-app.get('/api/', (c) => {
-  return c.text('Hello Hono!')
-})
 
+const requiresAdmin = async (c: Context, next) => {
+  let user;
+  try {
+    user = getUser(c);
+  } catch (e) {
+    if (e instanceof Error && e.message == "Missing session") {
+
+      return c.notFound();
+    } else {
+      return c.json({ msg: "Unauthorized" })
+    }
+  }
+  if (admins.includes(user.sub)) {
+
+    await next();
+  } else {
+    return c.notFound();
+  }
+
+};
+
+app.use('/api/me/*', requiresAuth());
+app.use('/api/admin/*', requiresAuth(), requiresAdmin);
+app.use('/admin/*', requiresAuth(), requiresAdmin);
+app.use('/admin', requiresAuth(), requiresAdmin);
 app.get('/api/me', (c) => {
   const user = getUser(c);
   return c.json(user);
 
 })
 
-app.get('/api/me/home', (c) => {
-  const user = getUser(c);
-  return c.json({ message: `Welcome back, ${user.name}!` });
-});
+app.get('/api/me/home', home_feed);
 
 app.get('/api/me/designs', async (c) => {
   const user = getUser(c);
-  const { results }= await c.env.DB.prepare("select * from designs where user_auth0_id = ?").bind(user.sub).all();
+  const { results } = await c.env.DB.prepare("select * from designs where user_auth0_id = ?").bind(user.sub).all();
   return c.json(results);
 })
 app.get('/api/me/designs/:id', async (c) => {
@@ -52,23 +85,23 @@ app.get('/api/me/designs/:id', async (c) => {
   if (!design) {
     return c.json({ error: "Design not found" }, 404);
   }
-  
-if (format == "fd") {
 
-  let formData = new FormData();
-  if (design.current_state) {
-    formData.append("current_state", new Blob([new Uint8Array(design.current_state)], { type: "application/octet-stream" }));
-  }
-  if (design.history_stack) {
-    formData.append("history_stack", new Blob([new Uint8Array(design.history_stack)], { type: "application/octet-stream" }));
-  }
-  formData.append("metadata", new Blob([JSON.stringify({ name: design.name, aspect_ratio: design.aspect_ratio })], { type: "application/json" }));
+  if (format == "fd") {
 
-  return new Response(formData);
-} else {
-  return c.json(design);
-}
- 
+    const formData = new FormData();
+    if (design.current_state) {
+      formData.append("current_state", new Blob([new Uint8Array(design.current_state)], { type: "application/octet-stream" }));
+    }
+    if (design.history_stack) {
+      formData.append("history_stack", new Blob([new Uint8Array(design.history_stack)], { type: "application/octet-stream" }));
+    }
+    formData.append("metadata", new Blob([JSON.stringify({ name: design.name, aspect_ratio: design.aspect_ratio })], { type: "application/json" }));
+
+    return new Response(formData);
+  } else {
+    return c.json(design);
+  }
+
 })
 
 app.post('/api/me/designs/new', async (c) => {
@@ -99,13 +132,121 @@ app.get('/api/me/sessions', async (c) => {
   return c.json(sessions);
 })
 
-app.post('/api/me/sessions/new', async (c) => {
+app.post('/api/admin/sessions/generate', async (c) => {
+  return c.notFound();
+  /*
   const user = getUser(c);
-  const { location, images_count } = await c.req.json();
+ 
+  const { location, images_count, tier } = await c.req.json();
+  const owner_id = c.req.param("owner_id") ? c.req.param("owner_id") : null;
+
   const id = ulid();
-  await c.env.DB.prepare("insert into sessions (id, user_auth0_id, location, images_count) values (?, ?, ?, ?)").bind(id, user.sub, location, images_count).run();
-  return c.json({ id });
+  await c.env.DB.prepare("insert into sessions (id, user_auth0_id, location, images_count) values (?, ?, ?, ?)").bind(id, owner_id, location, images_count, tier).run();
+  return c.json({ id });*/
 })
+
+
+
+app.get('/api/admin/home', adminFeed);
+app.post('/api/admin/sessions/authorize', async (c) => {
+  const id = c.req.query("id");
+  await c.env.DB.prepare("update sessions set authorized = ? where id = ?").bind(1, id).run();
+  return c.json({ "msg": "success" });
+})
+app.post('/api/admin/sessions/deauthorize', async (c) => {
+  const id = c.req.query("id");
+  await c.env.DB.prepare("update sessions set authorized = ? where id = ?").bind(0, id).run();
+  return c.json({ "msg": "success" });
+})
+app.post('/api/admin/sessions/login', async (c) => {
+  const id = c.req.query("id");
+  const location = c.req.query("location");
+  await c.env.DB.prepare("update sessions set location = ? where id = ?").bind(location, id).run();
+
+  return c.json({ "msg": "success" });
+})
+app.post('/api/webhook/tally/sessions/pay', async (c) => {
+  if (c.req.header("Authorization") != `Bearer ${process.env.TALLY_WEBHOOK_API_KEY}`){
+    console.log("Wrong auth");
+    return c.notFound();
+    
+  }
+  
+  const data = {};
+  const json = await c.req.json();
+  //console.log("Hello");
+  //console.log(json);
+  for (const field of json["data"]["fields"]) {
+    data[field["label"]] = field["value"];
+  }
+
+  if (!(data["proof-of-purchase"] || data["user_id"] || data["tier"])) {
+    c.status(400);
+    return c.json({ message: "lacking input" });
+  }
+  //console.log(data);
+  const id = ulid();
+  await c.env.DB.prepare("insert into sessions (id, user_auth0_id, tier, authorized, payment_proof) values (?, ?, ?, ?, ?)").bind(id, data["user_id"], data["tier"], 0, data["proof-of-purchase"][0].url).run();
+  return c.json({ id });
+
+})
+/*
+{
+  app_metadata: {},
+  created_at: '2026-06-21T14:55:42.099Z',
+  email: 'j+smith@example.com',
+  email_verified: true,
+  family_name: 'Smith',
+  given_name: 'John',
+  last_password_reset: '2026-06-21T14:55:42.099Z',
+  name: 'John Smith',
+  nickname: 'j+smith',
+  phoneNumber: '123-123-1234',
+  phone_number: '123-123-1234',
+  phone_verified: true,
+  picture: 'http://www.gravatar.com/avatar/?d=identicon',
+  tenant: 'alphalicious',
+  updated_at: '2026-06-21T14:55:42.099Z',
+  user_id: 'auth0|5f7c8ec7c33c6c004bbafe82',
+  user_metadata: {},
+  username: 'j+smith'
+}
+
+*/
+
+/*
+
+exports.onExecutePostUserRegistration = async (event, api) => {
+  const API_ENDPOINT = "https://photobooth-project.tailf2950e.ts.net";
+  await fetch(`${API_ENDPOINT}/api/webhook/auth0/account-created`, {
+    method: "POST",
+    body: JSON.stringify(event.user),
+    headers: {
+      // @ts-ignore
+      "Authentication": `Bearer ${event.secrets.API_KEY}`
+    }
+    // …
+  })
+};
+ */
+app.post('/api/webhook/auth0/account-created', async (c) => {
+  // @ts-expect-error
+  if (c.req.header("Authorization") != `Bearer ${process.env.AUTH0_WEBHOOK_API_KEY}`) {
+    //console.log("Not found")
+    return c.notFound();
+   
+  }
+  const user = await c.req.json();
+  //console.log("Hi ughm");
+  await c.env.DB.prepare("insert into users (auth0_id, email, name) values (?, ?, ?)").bind(user.user_id, user.email, user.name).run();
+  return c.json({ id: user.user_id })
+})
+
+/*
+app.post('/api/me/sessions/pay', async(c) => {
+  const body = await c.req.formData();
+  const proof = body.get("proof-of-payment");
+})*/
 
 app.post('/api/me/designs/:id/order', async (c) => {
   const user = getUser(c);
@@ -114,5 +255,6 @@ app.post('/api/me/designs/:id/order', async (c) => {
 })
 
 
+app.get('*', ssr)
 
 export default app

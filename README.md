@@ -4,15 +4,15 @@ Before the event, staff will have to configure the system's
 - list of events they plan to attend within the duration of the system's operation or list of venues where individual machines will run.
 - access pass tiers they choose to offer which can have varying quota or limits based on their prices
 - plugins and source code, if they choose to
+These things have 
 
 Before or on the day of the event, the user will have to purchase an access pass:
 - through the web dashboard by:
-    - accessing the service's website, 
+    - accessing the service's website,
     - logging into Auth0
     - checking out the tier they'd like to purchase
-    - paying for their access pass
-        - automatic 
-        - manual verification
+    - paying for their access pass (At this time, A Photobooth Project does not yet integrate , so users have to upload their proof of payment.) 
+        - 
 - 
 
 

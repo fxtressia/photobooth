@@ -1,0 +1,2 @@
+import { brandName, dashWallpaper, admins, tiers, paymentMessage, paymentImage } from "./config.json" with { type: 'json' };
+export { brandName, dashWallpaper, admins, tiers, paymentMessage, paymentImage };

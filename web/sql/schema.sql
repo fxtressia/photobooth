@@ -20,10 +20,14 @@ CREATE INDEX IF NOT EXISTS index_designs_user ON designs (user_auth0_id);
 
 CREATE TABLE IF NOT EXISTS sessions (
     id TEXT PRIMARY KEY NOT NULL,
-    user_auth0_id TEXT NOT NULL,
-    location INTEGER NOT NULL,
+    user_auth0_id TEXT,
+    venue_location INTEGER,
     created_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now')),
-    images_count INTEGER NOT NULL DEFAULT 0,
+    finished INTEGER DEFAULT 0,
+    authorized INTEGER NOT NULL,
+    payment_proof TEXT,
+    tier INTEGER NOT NULL,
+    images_taken_count INTEGER NOT NULL DEFAULT 0,
     FOREIGN KEY (user_auth0_id) REFERENCES users (auth0_id) ON DELETE CASCADE
 ) STRICT;
 

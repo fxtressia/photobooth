@@ -21,9 +21,40 @@ export default function Dashboard(props: any) {
 
   }, []);
   return <div style={{
-    backgroundImage: `url("/images/${dashWallpaper}")`, position: "relative", display: "flex", justifyContent: "center", paddingBlock: "3.5%", paddingLeft: "25px", paddingRight: "25px", alignItems: "center", width: "stretch", height: "fit-content", minHeight: "100vh", flexDirection: "column", backgroundSize: "cover"
+    position: "relative", display: "flex", justifyContent: "center", paddingBlock: "3.5%", paddingLeft: "15px", paddingRight: "15px", alignItems: "center", width: "stretch", height: "fit-content", minHeight: "100vh", flexDirection: "column", 
   }}>
-    <div style={{ backgroundColor: "white", borderRadius: "15px" }}>
+    <div style={{
+      zIndex: "-2",
+      width: "100vw",
+      height: "100vh",
+      position: "fixed",
+      top: "0",
+      backgroundSize: "cover",
+      left: "0",
+      backgroundImage: `url("/images/${dashWallpaper}")`,
+}}></div>
+    <div style={{ zIndex: "-1", position: "fixed", overflow: "hidden", bottom: "0", left: "0", width: "100%", display: "flex", gap: "5px", backgroundColor: "#5757dd", fontSize: "1.1rem", }}>
+
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", borderRadius: "0 12px 12px 0", backgroundColor: "#7ecb18", color: "white", fontWeight: "bold", padding: "5px", width: "5rem" }}>start</div>
+      <div style={{ display: "flex", flexGrow: "1", flexWrap: "wrap", padding: "4.5px", }}>
+        <div style={{ display: "flex", justifyContent: "left", alignItems: "center", padding: "5px", borderRadius: "5px", color: "#ffffff", backgroundColor: "#6e6eff", paddingLeft: "15px", paddingRight: "15px" }}>
+          {brandName}
+        </div>
+      </div>
+      <div style={{ display: "flex", flexWrap: "wrap", padding: "5px", justifyContent: "center", alignItems: "center", color: "white", paddingRight: "25px", paddingLeft: "25px", borderRadius: "12px 0 0 12px", backgroundColor: "#3d3dc2" }}>
+
+        {
+          (() => {
+            if (time) {
+              return <>{time.getHours()}:{time.getMinutes()}</>
+            } else {
+              return <>--:--</>
+            }
+          })()
+        }
+      </div>
+    </div>
+    <div style={{ backgroundColor: "white", borderRadius: "15px", maxWidth: "100vw" }}>
       <div style={{ paddingLeft: "25px", paddingRight: "25px", backgroundColor: "#d3d3d3", display: "flex", paddingTop: "5px", paddingBottom: "5px", justifyContent: "space-between", alignItems: "center", borderRadius: "15px 15px 0 0" }}>
         <div>
 
@@ -42,29 +73,10 @@ export default function Dashboard(props: any) {
         {
           child
         }
-        <div style={{ position: "absolute", overflow: "hidden", bottom: "0", left: "0", width: "100%", display: "flex", gap: "5px", backgroundColor: "#5757dd", fontSize: "1.1rem", }}>
-
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", borderRadius: "0 12px 12px 0", backgroundColor: "#7ecb18", color: "white", fontWeight: "bold", padding: "5px", width: "5rem" }}>start</div>
-          <div style={{ display: "flex", flexGrow: "1", flexWrap: "wrap", padding: "4.5px", }}>
-            <div style={{ display: "flex", justifyContent: "left", alignItems: "center", padding: "5px", borderRadius: "5px", color: "#ffffff", backgroundColor: "#6e6eff", paddingLeft: "15px", paddingRight: "15px" }}>
-              {brandName}
-            </div>
-          </div>
-          <div style={{ display: "flex", flexWrap: "wrap", padding: "5px", justifyContent: "center", alignItems: "center", color: "white", paddingRight: "25px", paddingLeft: "25px", borderRadius: "12px 0 0 12px", backgroundColor: "#3d3dc2" }}>
-
-            {
-              (() => {
-                if (time){
-                  return <>{time.getHours()}:{time.getMinutes()}</>
-                } else {
-                  return <>--:--</>
-                }
-              })()
-            }
-          </div>
-        </div>
+    
       </div>
     </div>
+    
   </div>
 }
 

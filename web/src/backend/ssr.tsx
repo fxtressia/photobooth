@@ -6,7 +6,7 @@ import {
     createStaticRouter,
     StaticRouterProvider,
 } from "react-router";
-import Container from "~/Container";
+import Container from "~/views/DesignEditor/Container";
 import Provider from "~/Provider";
 //import templateHnotml from '../../index.html?raw';
 import routes from "~/routes";

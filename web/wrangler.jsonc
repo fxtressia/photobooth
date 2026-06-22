@@ -6,6 +6,22 @@
  "compatibility_flags": [
      "nodejs_compat"
   ],
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "BOOTH_COORDINATOR",
+        "class_name": "BoothCoordinator"
+      }
+    ]
+  },
+  // Crucial: You must notify Cloudflare to register the class
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_classes": ["BoothCoordinator"]
+    }
+  ]
+},
   "d1_databases": [
     {
       "binding": "DB", // i.e. available in your Worker on env.DB

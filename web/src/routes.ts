@@ -36,9 +36,11 @@ export default [{
         { path: "admin", lazy: { Component: async () => (await import("~/views/Admin")).default, loader: async () => (await import("~/views/Admin")).adminLoader } },
         { path: "pay", lazy: { Component: async () => (await import("~/views/Payment")).default, loader: async () => (await import("~/views/Payment")).paymentLoader } }
     ]
-},/*
+},
 {
+    // SSR is disabled for this endpoint
     path: "/edit",
-    lazy: { Component: async () => (await import("~/views/DesignEditor")).default }
-}*/
+    lazy: { Component: async () => (await import("~/views/DesignEditor/PhotoboothEditor")).default, loader: async () => ((await import("~/views/DesignEditor")).loader) },
+    
+}
 ]

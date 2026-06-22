@@ -8,9 +8,9 @@ import Preview from "./components/Preview"
 import ContextMenu from "./components/ContextMenu"
 
 const DesignEditor = () => {
-  const editorType = useEditorType()
+  const editorType = "GRAPHIC"
   const { displayPreview, setDisplayPreview } = useDesignEditorContext()
-
+  
   return (
     <>
       {displayPreview && <Preview isOpen={displayPreview} setIsOpen={setDisplayPreview} />}

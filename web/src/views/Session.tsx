@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Form } from "react-router";
+import { tiers } from "~/config";
 
 export default function Session(is_admin: boolean) {
     return (data) => {
@@ -9,15 +10,19 @@ export default function Session(is_admin: boolean) {
         useEffect(() => {
             setDateStr(date.toString())
         }, []);
+        
+        
 
-
-        return (<div key={data.id} style={{  display: "flex", flexDirection: "column", gap: "25px", backgroundColor: "#f5ff63", borderRadius: "15px", padding: "10px" }}><div><h4>
-            {dateStr}
+        const session = (<div key={data.id} style={{ display: "flex", flexDirection: "column", gap: "25px", backgroundColor: data.authorized ? "#b5fb5a" :  "#f5ff63", borderRadius: "15px", padding: "10px" }}><div><h4>
+            {tiers[data.tier].name} - Purchase Date: {dateStr}
 
         </h4>
+        {(() => { if (is_admin){
+                return <p>{tiers[data.tier].price}</p>
+        }})()}
 
             {(() => {
-                if (data.authorized) {
+                if (data.authorized && !is_admin) {
                     return <div>Press here and scan the machine!</div>
                 } else {
 
@@ -49,11 +54,11 @@ export default function Session(is_admin: boolean) {
                                 width: "stretch", backgroundColor: "#f8fdb5", padding: "5px", borderRadius: "5px"
                             }} target="_blank" href={data.payment_proof}>See Proof of Payment</a>
 
-                            <Form action="verify-payment">
+                            <form action={`/api/admin/${data.authorized ? 'de' : ''}verify-payment?id=${data.id}`} method="post">
                                 <button disabled={!verifyEnabled}  style={{ backgroundColor: "#f8fdb5", width: "stretch", textAlign: "center", padding: "5px", borderRadius: "5px" }}>
-                                    Verify Payment
+                                    {data.authorized ? 'Dev' : 'V'}erify Payment
                                 </button>
-                            </Form></>;
+                            </form></>;
                     } else {
                         return <></>;
                     }
@@ -61,7 +66,13 @@ export default function Session(is_admin: boolean) {
                 </div>
         </div>);
 
-
+        if (data.authorized == 1 && !is_admin){
+            return <a key={data.id}  href={`/me/launch?session=${data.id}`}>
+                {session}
+            </a>
+        } else {
+            return session;
+        }
 
     }
 }

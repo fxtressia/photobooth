@@ -148,15 +148,15 @@ app.post('/api/admin/sessions/generate', async (c) => {
 
 
 app.get('/api/admin/home', adminFeed);
-app.post('/api/admin/sessions/authorize', async (c) => {
+app.post('/api/admin/verify-payment', async (c) => {
   const id = c.req.query("id");
   await c.env.DB.prepare("update sessions set authorized = ? where id = ?").bind(1, id).run();
-  return c.json({ "msg": "success" });
+  return c.redirect('/admin/');
 })
-app.post('/api/admin/sessions/deauthorize', async (c) => {
+app.post('/api/admin/deverify-payment', async (c) => {
   const id = c.req.query("id");
   await c.env.DB.prepare("update sessions set authorized = ? where id = ?").bind(0, id).run();
-  return c.json({ "msg": "success" });
+  return c.redirect('/admin/');
 })
 app.post('/api/admin/sessions/login', async (c) => {
   const id = c.req.query("id");

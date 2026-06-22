@@ -1,17 +1,17 @@
 import React, { useEffect, useRef, useState } from "react"
 import ResizeObserver from "resize-observer-polyfill"
 import useAppContext from "~/hooks/useAppContext"
-import { editorFonts } from "./constants/fonts"
-import { getPublicDesigns } from "./store/slices/designs/actions"
-import { getPublicComponents } from "./store/slices/components/actions"
-import { getFonts } from "./store/slices/fonts/actions"
-import { getPixabayResources } from "./store/slices/resources/actions"
-import { getUploads } from "./store/slices/uploads/actions"
-import { useAppDispatch } from "./store/store"
+import Loading from "../../components/Loading"
+import { editorFonts } from "../../constants/fonts"
+import { getFonts } from "../../store/slices/fonts/actions"
+import { getPixabayResources } from "../../store/slices/resources/actions"
+import { getUploads } from "../../store/slices/uploads/actions"
+import { useAppDispatch } from "../../store/store"
 
-const Container = ({ children }: { children: React.ReactNode }) => {
+function Container({ children }: { children: React.ReactNode }) {
   const containerRef = useRef<HTMLDivElement>(null)
   const { isMobile, setIsMobile } = useAppContext()
+  const [loaded, setLoaded] = useState(false)
   const dispatch = useAppDispatch()
   const updateMediaQuery = (value: number) => {
     if (!isMobile && value >= 800) {
@@ -42,14 +42,11 @@ const Container = ({ children }: { children: React.ReactNode }) => {
   useEffect(() => {
     dispatch(getFonts())
     dispatch(getUploads())
-    dispatch(getPublicComponents())
     dispatch(getPixabayResources())
-    dispatch(getPublicDesigns())
-
     loadFonts()
-    // setTimeout(() => {
-    //   setLoaded(true)
-    // }, 1000)
+    setTimeout(() => {
+      setLoaded(true)
+    }, 1000)
   }, [])
 
   const loadFonts = () => {
@@ -72,14 +69,13 @@ const Container = ({ children }: { children: React.ReactNode }) => {
     <div
       ref={containerRef}
       style={{
-      
-      
-   
-     //   width: "100vw",
-     //minHeight: "100%",
+        flex: 1,
+        display: "flex",
+        height: "100vh",
+        width: "100vw",
       }}
     >
-      {children}
+      {loaded ? <>{children} </> : <Loading />}
     </div>
   )
 }

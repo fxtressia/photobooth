@@ -2,10 +2,12 @@ import { Context, Hono } from 'hono'
 
 import { auth0, requiresAuth, getUser, claimEquals } from '@auth0/auth0-hono'
 import { monotonicFactory } from "ulidx";
-import { admins } from "~/config";
+import { admins } from "../config";
 import ssr from './ssr';
+import crypto from "node:crypto";
 import home_feed from './home_feed';
 import adminFeed from './admin_feed';
+
 const app = new Hono()
 if (typeof globalThis !== 'undefined' && !('document' in globalThis)) {
   Object.defineProperty(globalThis, 'document', {
@@ -126,11 +128,67 @@ app.patch('/api/me/designs/:id', async (c) => {
   return c.json({ message: "Design updated" });
 })
 
-app.get('/api/me/sessions', async (c) => {
+app.get('/api/me/sessions', async (c: Context) => {
   const user = getUser(c);
   const sessions = await c.env.DB.prepare("select * from sessions where user_auth0_id = ?").bind(user.sub).all();
   return c.json(sessions);
 })
+
+
+app.post('/api/me/venue/unlock', async (c: Context) => {
+  const user = getUser(c);
+  const id = c.req.query("session");
+  if (!id) {
+
+    return c.json({
+      msg: "Bad Request"
+    }, 400);
+  }
+  const sessions = (await c.env.DB.prepare("select * from sessions where id = ? and user_auth0_id = ? and authorized = 1").bind(id, user.sub).all()).results;
+  if (sessions.length <= 0) {
+    return c.json({
+      msg: "Bad Request"
+    }, 401);
+  }
+  const session = sessions[0];
+  const path = `/apps/${process.env.PUSHER_APP_ID}/events`;
+  const body = JSON.stringify({
+    data: JSON.stringify({
+      session: {
+        user_auth0_id: session.user_auth0_id,
+        id: session.id,
+        tier: session.tier,
+      }
+    }),
+    channel: "photobooth-ws",
+    name: "booth-login"
+
+  });
+  const bodyMd5 = crypto.createHash('md5').update(body).digest('hex');
+  const timestamp = Math.floor(Date.now() / 1000);
+  const params = `auth_key=${process.env.PUSHER_APP_KEY}&auth_timestamp=${timestamp}&auth_version=1.0&body_md5=${bodyMd5}`;
+  const presign = `POST\n${path}\n${params}`;
+  const authSign = crypto.createHmac('sha256', process.env.PUSHER_APP_SECRET).update(presign).digest('hex');
+
+
+  const res = await fetch(`https://api-${process.env.PUSHER_APP_REGION}.pusher.com${path}?${params}&auth_signature=${authSign}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body
+  });
+  if (res.ok) {
+    return c.text("OK");
+  } else {
+
+
+    return c.json({
+      text: await res.text(),
+      pusherStatusText: res.statusText,
+      pusherStatusCode: res.status
+      // @ts-expect-error
+    }, res.status)
+  }
+});
 
 app.post('/api/admin/sessions/generate', async (c) => {
   return c.notFound();
@@ -166,12 +224,12 @@ app.post('/api/admin/sessions/login', async (c) => {
   return c.json({ "msg": "success" });
 })
 app.post('/api/webhook/tally/sessions/pay', async (c) => {
-  if (c.req.header("Authorization") != `Bearer ${process.env.TALLY_WEBHOOK_API_KEY}`){
+  if (c.req.header("Authorization") != `Bearer ${process.env.TALLY_WEBHOOK_API_KEY}`) {
     console.log("Wrong auth");
     return c.notFound();
-    
+
   }
-  
+
   const data = {};
   const json = await c.req.json();
   //console.log("Hello");
@@ -234,7 +292,7 @@ app.post('/api/webhook/auth0/account-created', async (c) => {
   if (c.req.header("Authorization") != `Bearer ${process.env.AUTH0_WEBHOOK_API_KEY}`) {
     //console.log("Not found")
     return c.notFound();
-   
+
   }
   const user = await c.req.json();
   //console.log("Hi ughm");

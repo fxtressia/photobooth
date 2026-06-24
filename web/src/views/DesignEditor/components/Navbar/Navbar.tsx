@@ -260,12 +260,25 @@ const Navbar = () => {
 
   return (
     // @ts-ignore
-    <ThemeProvider theme={DarkTheme}>
-      <Container>
-        <div style={{ color: "#ffffff" }}>
+    <ThemeProvider style={{position: "sticky", top: 0, left: 0}} theme={DarkTheme}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", height: "1.5rem", paddingLeft: "15px", backgroundColor: "#6e6eff"}}>
+        {/*<div style={{ color: "#ffffff" }}>
           <Logo size={36} />
-        </div>
-        <DesignTitle />
+        </div>*/}
+        <div style={{display: "flex", color: "#ffffff", gap: "25px", }}>
+          <div style={{display: "flex"}}>
+            <button style={{ color: "#ffffff", paddingBottom: 0, paddingTop: 0}}>
+            File
+          </button>
+            <button style={{ color: "#ffffff",  paddingBottom: 0, paddingTop: 0, }}>
+            Edit
+          </button>
+            <button style={{  color: "#ffffff",  paddingBottom: 0, paddingTop: 0 }}>
+            Selection
+          </button>
+          </div>
+          <DesignTitle />
+         </div> 
         <Block $style={{ display: "flex", alignItems: "center", justifyContent: "flex-end" }}>
           <input
             multiple={false}
@@ -304,7 +317,7 @@ const Navbar = () => {
           >
             Export
           </Button>
-          <Button
+          {/*<Button
             size="compact"
             onClick={() => setDisplayPreview(true)}
             kind={KIND.tertiary}
@@ -317,26 +330,26 @@ const Navbar = () => {
             }}
           >
             <Play size={24} />
-          </Button>
+          </Button>/}
 
-          <Button
+          {/*<Button
             size="compact"
             onClick={() => window.location.replace("https://github.com/layerhub-io/react-design-editor")}
             kind={KIND.tertiary}
           >
             <Github size={24} />
-          </Button>
+          </Button>}*/}
 
-          <Button
+          {/*<Button
             style={{ marginLeft: "0.5rem" }}
             size="compact"
             onClick={() => window.location.replace("https://editor.layerhub.io")}
             kind={KIND.primary}
           >
             Try PRO
-          </Button>
+          </Button>*/}
         </Block>
-      </Container>
+      </div>
     </ThemeProvider>
   )
 }

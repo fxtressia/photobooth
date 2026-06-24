@@ -7,6 +7,8 @@ import ssr from './ssr';
 import crypto from "node:crypto";
 import home_feed from './home_feed';
 import adminFeed from './admin_feed';
+import hashAPIKey from './hash_api_key';
+import verifyPusherWebhook from './pusher';
 
 const app = new Hono()
 if (typeof globalThis !== 'undefined' && !('document' in globalThis)) {
@@ -74,12 +76,12 @@ app.get('/api/me', (c) => {
 
 app.get('/api/me/home', home_feed);
 
-app.get('/api/me/designs', async (c) => {
+app.get('/api/me/designs', async (c: Context) => {
   const user = getUser(c);
   const { results } = await c.env.DB.prepare("select * from designs where user_auth0_id = ?").bind(user.sub).all();
   return c.json(results);
 })
-app.get('/api/me/designs/:id', async (c) => {
+app.get('/api/me/designs/:id', async (c: Context) => {
   const user = getUser(c);
   const id = c.req.param('id');
   const format = c.req.query('format') || '';
@@ -106,7 +108,7 @@ app.get('/api/me/designs/:id', async (c) => {
 
 })
 
-app.post('/api/me/designs/new', async (c) => {
+app.post('/api/me/designs/new', async (c: Context) => {
   const user = getUser(c);
   const { aspect_ratio } = await c.req.json();
   const id = ulid();
@@ -114,7 +116,7 @@ app.post('/api/me/designs/new', async (c) => {
   return c.json({ id });
 })
 
-app.patch('/api/me/designs/:id', async (c) => {
+app.patch('/api/me/designs/:id', async (c: Context) => {
   const user = getUser(c);
   const id = c.req.param('id');
   const data = await c.req.formData();
@@ -135,10 +137,68 @@ app.get('/api/me/sessions', async (c: Context) => {
 })
 
 
+
+app.post('/api/venue/auth', async (c: Context) => {
+  const key = c.req.header("Authorization");
+  if (!key) return c.json({ "msg": "unauthorized" }, 401);
+  const socketId = c.req.query("socket_id");
+  if (!socketId) {
+    return c.json({ "msg": "Bad Request" }, 400);
+  }
+  const venue = (await c.env.DB.prepare("select * from venues").all()).results.find((a) => a.apikey == hashAPIKey(key));
+  if (!venue) return c.json({ "msg": "venue not found" }, 400);
+
+  const presence = (() => {
+    const channel_data = JSON.stringify({ user_id: venue });
+    const stringToSign = `${socketId}:presence-venues:${channel_data}`;
+    const signature = crypto
+      .createHmac('sha256', process.env.PUSHER_APP_SECRET)
+      .update(stringToSign)
+      .digest('hex');
+
+    return { auth: `${process.env.PUSHER_APP_KEY}:${signature}`, channel_data };
+  })();
+
+  const user = (() => {
+    const user_data = JSON.stringify({ id: venue });
+    const stringToSign = `${socketId}::user::${user_data}`;
+    const signature = crypto
+      .createHmac('sha256', process.env.PUSHER_APP_SECRET)
+      .update(stringToSign)
+      .digest('hex');
+    return {
+      auth: `${process.env.PUSHER_APP_KEY}:${signature}`,
+      user_data,
+    };
+  })();
+
+  return c.json({
+    presence, user
+  });
+
+})
+
+app.post('/api/webhook/pusher/*', verifyPusherWebhook);
+app.post('/api/webhook/pusher/online', async (c: Context) => {
+  const body = await c.req.json();
+  for (const event of body.events) {
+    if (event.name == 'member_added') {
+     
+    }
+
+    if (event.name == 'member_removed') {
+     
+    }
+  }
+})
+
+
 app.post('/api/me/venue/unlock', async (c: Context) => {
   const user = getUser(c);
   const id = c.req.query("session");
-  if (!id) {
+  const venue = c.req.query("venue");
+
+  if (!id || !venue) {
 
     return c.json({
       msg: "Bad Request"
@@ -147,7 +207,7 @@ app.post('/api/me/venue/unlock', async (c: Context) => {
   const sessions = (await c.env.DB.prepare("select * from sessions where id = ? and user_auth0_id = ? and authorized = 1").bind(id, user.sub).all()).results;
   if (sessions.length <= 0) {
     return c.json({
-      msg: "Bad Request"
+      msg: "Unauthorized"
     }, 401);
   }
   const session = sessions[0];
@@ -160,7 +220,7 @@ app.post('/api/me/venue/unlock', async (c: Context) => {
         tier: session.tier,
       }
     }),
-    channel: "photobooth-ws",
+    channel: `#server-to-user-${venue}`,
     name: "booth-login"
 
   });
@@ -177,7 +237,7 @@ app.post('/api/me/venue/unlock', async (c: Context) => {
     body
   });
   if (res.ok) {
-    return c.text("OK");
+    return c.redirect("/");
   } else {
 
 
@@ -189,6 +249,9 @@ app.post('/api/me/venue/unlock', async (c: Context) => {
     }, res.status)
   }
 });
+
+
+
 
 app.post('/api/admin/sessions/generate', async (c) => {
   return c.notFound();

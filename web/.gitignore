@@ -5,7 +5,7 @@ dist/
 #brand
 src/views/Payment/brand.tsx
 src/config/*.json
-
+src/assets/brand
 # dev
 .yarn/
 !.yarn/releases

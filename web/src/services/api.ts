@@ -256,8 +256,8 @@ class ApiService {
   getFonts(): Promise<IFontFamily[]> {
     return new Promise(async (resolve, reject) => {
       try {
-        const { data } = await this.base.get("/fonts")
-        resolve(data.fonts) 
+        const fonts = await (await fetch("/assets/fonts.json")).json();
+        resolve(fonts) 
       } catch (err) {
         reject(err)
       }

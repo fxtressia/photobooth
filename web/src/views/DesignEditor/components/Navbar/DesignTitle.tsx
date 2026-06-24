@@ -11,88 +11,45 @@ interface State {
 }
 
 const DesignTitle = () => {
-  const [state, setState] = React.useState<State>({ name: "My first design.", width: 0 })
-  const { currentDesign, setCurrentDesign } = useDesignEditorContext()
-  const inputTitleRef = React.useRef<Input>(null)
-  const spanRef = React.useRef<HTMLDivElement | null>(null)
-
-  const handleInputChange = (name: string) => {
-    setState({ ...state, name: name, width: spanRef.current?.clientWidth! })
-    setCurrentDesign({ ...currentDesign, name })
-  }
-
-  React.useEffect(() => {
-    const name = currentDesign.name
-    if (name || name === "") {
-      spanRef.current!.innerHTML = name
-      setState({ ...state, name: name, width: spanRef.current?.clientWidth! + 20 })
-    }
-  }, [currentDesign.name])
-
-  React.useEffect(() => {
-    setState({ ...state, width: spanRef.current?.clientWidth! + 20 })
-  }, [state.name])
-
+  const [text, setText] = React.useState<string>( "Untitled")
+ 
   return (
     <Block
       $style={{
         display: "flex",
         alignItems: "center",
+        width: "fit-content",
         justifyContent: "center",
         color: "#ffffff",
         opacity: 1,
+      
       }}
     >
-      <Block $style={{ display: "flex", position: "absolute", top: "-10px", left: "50%", width: "100%" }}>
-        <Block
-          $style={{
-            fontFamily: "Uber Move Text",
-            position: "absolute",
-            top: "-10px",
-            left: "50%",
-            fontSize: "14px",
-            fontWeight: 500,
+   
+        <span
+        contentEditable="plaintext-only"
+        suppressContentEditableWarning={true}
+        onChange={(e) => {
+          const newName = e.currentTarget.textContent || "";
+          setText(newName);
+          //setCurrentDesign({ ...currentDesign, name: newName })
+        }}
+          style={{
+        
+            fontFamily: "Tenor Sans",
+     
+    
+            width: "fit-content",
+            fontSize: "0.9rem",
+        
+            fontWeight: 300,
           }}
-          ref={spanRef}
+     
         >
-          {state.name}
-        </Block>
-      </Block>
-      <Block width={`${state.width}px`} display="flex">
-        <Input
-          onChange={(e: any) => handleInputChange(e.target.value)}
-          overrides={{
-            Root: {
-              style: {
-                backgroundColor: "transparent",
-                borderTopStyle: "none",
-                borderBottomStyle: "none",
-                borderRightStyle: "none",
-                borderLeftStyle: "none",
-              },
-            },
-            InputContainer: {
-              style: {
-                backgroundColor: "transparent",
-                paddingRight: 0,
-              },
-            },
-            Input: {
-              style: {
-                fontWeight: 500,
-                fontSize: "14px",
-                width: `${state.width}px`,
-                fontFamily: "Uber Move Text",
-                backgroundColor: "transparent",
-                color: "#ffffff",
-                paddingRight: 0,
-              },
-            },
-          }}
-          value={state.name}
-          ref={inputTitleRef}
-        />
-      </Block>
+          {text}
+        </span>
+  
+  
 
       <StatefulTooltip
         showArrow={true}

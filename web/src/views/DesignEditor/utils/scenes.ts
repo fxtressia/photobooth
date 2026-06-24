@@ -1,4 +1,20 @@
 import type { IScene } from "@layerhub-io/types"
+import { createContext, useContext, type Dispatch, type SetStateAction } from 'react';
+
+interface ScenesEnabledContextType {
+  enabled: boolean;
+  setEnabled: Dispatch<SetStateAction<boolean>>;
+}
+export const ScenesEnabledContext = createContext<ScenesEnabledContextType|null>(null);
+
+export function useScenesEnabled(){
+  const enabled = useContext(ScenesEnabledContext);
+
+  if (!enabled) throw new Error('useScenesEnabled must be used within a ScenesEnabledContext.Provider');
+
+  return enabled
+}
+
 
 export const findSceneIndexByTime = (scenes: IScene[], time: number) => {
   let currentIndex = 0

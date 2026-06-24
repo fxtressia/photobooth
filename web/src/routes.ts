@@ -31,7 +31,7 @@ export default [{
                 return { Component: pay, loader: pay.paymentLoader };
             }
         } */
-        { index: true,  lazy: { Component: async () => (await import("~/views/Home")).default, loader: async () => (await import("~/views/Home")).homeLoader } },
+        { index: true, lazy: { Component: async () => (await import("~/views/Home")).default, loader: async () => (await import("~/views/Home")).homeLoader } },
         { path: "faq", lazy: { Component: async () => (await import("~/views/Faq")).default } },
         { path: "admin", lazy: { Component: async () => (await import("~/views/Admin")).default, loader: async () => (await import("~/views/Admin")).adminLoader } },
         { path: "pay", lazy: { Component: async () => (await import("~/views/Payment")).default, loader: async () => (await import("~/views/Payment")).paymentLoader } }
@@ -41,6 +41,8 @@ export default [{
     // SSR is disabled for this endpoint
     path: "/edit",
     lazy: { Component: async () => (await import("~/views/DesignEditor/PhotoboothEditor")).default, loader: async () => ((await import("~/views/DesignEditor")).loader) },
-    
+    ErrorBoundary: RootErrorBoundary,
+
+
 }
 ]

@@ -1,0 +1,22 @@
+/*
+
+export interface IFontFamily {
+  id: string
+  fullName: string
+  family: string
+  style: string
+  url: string
+  postScriptName: string
+  preview: string
+  category: string
+}
+  */
+
+  {
+    "id":"",
+    "fullName": "",
+    "family": "",
+    "url": "",
+    "postScriptName": "",
+    "preview": "",
+    "category":""  }

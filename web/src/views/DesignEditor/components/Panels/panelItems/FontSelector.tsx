@@ -29,10 +29,11 @@ export default function () {
   const dispath = useAppDispatch()
 
   React.useEffect(() => {
+    if (!fonts || fonts.length === 0) return;
     const grouped = groupBy(fonts, "family")
     const standardFonts = Object.keys(grouped).map((key) => {
       const familyFonts = grouped[key]
-      const standardFont = familyFonts.find((familyFont) => familyFont.post_script_name.includes("-Regular"))
+      const standardFont = familyFonts.find((familyFont) => familyFont.postScriptName?.includes("-Regular") || familyFont.post_script_name?.includes("-Regular"))
       if (standardFont) {
         return standardFont
       }
@@ -44,13 +45,13 @@ export default function () {
   const handleFontFamilyChange = async (x: any) => {
     if (editor) {
       const font = {
-        name: x.post_script_name,
+        name: x.postScriptName,
         url: x.url,
       }
       await loadFonts([font])
 
       editor.objects.update({
-        fontFamily: x.post_script_name,
+        fontFamily: x.postScriptName,
         fontURL: font.url,
       })
     }
@@ -142,7 +143,7 @@ export default function () {
                     })}
                     id={font.id}
                   >
-                    <img src={font.preview} />
+                    <p>{font.fullName}</p>
                     {/* <LazyLoadImage url={font.preview} /> */}
                   </div>
                 )

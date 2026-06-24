@@ -14,8 +14,9 @@ import SceneItem from "./SceneItem"
 import { Block } from "baseui/block"
 import useContextMenuTimelineRequest from "~/hooks/useContextMenuTimelineRequest"
 import SceneContextMenu from "./SceneContextMenu"
-
+import { useScenesEnabled } from "~/views/DesignEditor/utils/scenes"
 const Scenes = () => {
+  const {enabled, setEnabled} = useScenesEnabled();
   const scenes = useDesignEditorPages()
   const { setScenes, setCurrentScene, currentScene, setCurrentDesign, currentDesign } =
     React.useContext(DesignEditorContext)
@@ -172,7 +173,7 @@ const Scenes = () => {
     >
       <Block
         id="TimelineItemsContainer"
-        $style={{ padding: "0.25rem 0.75rem", background: "#ffffff", position: "relative" }}
+        $style={{ display: enabled ? "none" : "inherit", padding: "0.25rem 0.75rem", background: "#ffffff", position: "relative" }}
       >
         <div className={css({ display: "flex", alignItems: "center" })}>
           {contextMenuTimelineRequest.visible && <SceneContextMenu />}

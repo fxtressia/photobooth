@@ -9,6 +9,7 @@ import { useEditor, useZoomRatio } from "@layerhub-io/react"
 import { StatefulTooltip } from "baseui/tooltip"
 import { Block } from "baseui/block"
 import { PLACEMENT } from "baseui/toast"
+import { useScenesEnabled } from "~/views/DesignEditor/utils/scenes"
 
 const Container = styled<"div", {}, Theme>("div", ({ $theme }) => ({
   height: "50px",
@@ -30,6 +31,7 @@ const Common = () => {
     zoomRatio: 20,
     zoomRatioTemp: 20
   })
+  const {enabled, setEnabled} = useScenesEnabled();
   const editor = useEditor()
   const zoomRatio: number = useZoomRatio()
 
@@ -66,10 +68,15 @@ const Common = () => {
 
   return (
     <Container>
-      <div>
+      <div style={{display: "flex", alignItems: "center"}}>
         <Button kind={KIND.tertiary} size={SIZE.compact}>
           <Icons.Layers size={20} />
         </Button>
+        <button onClick={() => {
+          setEnabled(!enabled);
+        }}>
+          {enabled ? "Close" : "Open"} Scenes
+          </button>
       </div>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "center" }}>
         <Button kind={KIND.tertiary} size={SIZE.compact}>

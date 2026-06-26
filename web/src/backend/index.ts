@@ -79,7 +79,7 @@ app.get('/api/me/home', home_feed);
 app.get('/api/me/designs', async (c: Context) => {
   const user = getUser(c);
   const { results } = await c.env.DB.prepare("select * from designs where user_auth0_id = ?").bind(user.sub).all();
-  return c.json(results);
+  return c.json(results.map((e) => { return {...e, current_state: undefined, history_stack: undefined};}));
 })
 app.get('/api/me/designs/:id', async (c: Context) => {
   const user = getUser(c);
@@ -99,7 +99,8 @@ app.get('/api/me/designs/:id', async (c: Context) => {
     if (design.history_stack) {
       formData.append("history_stack", new Blob([new Uint8Array(design.history_stack)], { type: "application/octet-stream" }));
     }
-    formData.append("metadata", new Blob([JSON.stringify({ name: design.name, aspect_ratio: design.aspect_ratio })], { type: "application/json" }));
+    formData.append("name", design.name);
+    formData.append("aspect_ratio", String(design.aspect_ratio));
 
     return new Response(formData);
   } else {
@@ -110,9 +111,23 @@ app.get('/api/me/designs/:id', async (c: Context) => {
 
 app.post('/api/me/designs/new', async (c: Context) => {
   const user = getUser(c);
-  const { aspect_ratio } = await c.req.json();
   const id = ulid();
-  await c.env.DB.prepare("insert into designs (id, user_auth0_id, aspect_ratio) values (?, ?, ?)").bind(id, user.sub, aspect_ratio).run();
+  const attached = c.req.query('contents_attached') || '';
+  if (attached == "yes") {
+    const fd = await c.req.formData();
+    const aspectRatioBlob = fd.get("aspect_ratio");
+    const historyStackBlob = fd.get("history_stack");
+    const currentStateBlob = fd.get("current_state");
+    if (!(aspectRatioBlob?.constructor?.name == "String") || !(historyStackBlob instanceof Blob) || !(currentStateBlob instanceof Blob)){
+     // console.log(!(aspectRatioBlob instanceof String), !(historyStackBlob instanceof Blob), !(currentStateBlob instanceof Blob), aspectRatioBlob?.constructor?.name);
+      return c.json({msg: "Missing or mismatching parameters"}, 400);
+    }
+    await c.env.DB.prepare("insert into designs (id, user_auth0_id, aspect_ratio, history_stack, current_state) values (?, ?, ?, ?, ?)").bind(id, user.sub, Number(aspectRatioBlob), await historyStackBlob.arrayBuffer(), await currentStateBlob.arrayBuffer()).run();
+  } else {
+    const { aspect_ratio } = await c.req.json();
+
+    await c.env.DB.prepare("insert into designs (id, user_auth0_id, aspect_ratio) values (?, ?, ?)").bind(id, user.sub, aspect_ratio).run();
+  }
   return c.json({ id });
 })
 
@@ -123,7 +138,7 @@ app.patch('/api/me/designs/:id', async (c: Context) => {
   const current_state = data.get("current_state");
   const history_stack = data.get("history_stack");
   try {
-    await c.env.DB.prepare("update designs set name = ?, current_state = ?, history_stack = ? where id = ? and user_auth0_id = ?").bind(data.get("name"), current_state instanceof File ? await current_state.arrayBuffer() : null, history_stack instanceof File ? await history_stack.arrayBuffer() : null, id, user.sub).run();
+    await c.env.DB.prepare("update designs set name = ?, current_state = ?, history_stack = ? where id = ? and user_auth0_id = ?").bind(data.get("name"), current_state instanceof Blob ? await current_state.arrayBuffer() : null, history_stack instanceof Blob ? await history_stack.arrayBuffer() : null, id, user.sub).run();
   } catch (e) {
     return c.json({ error: `Unable to change ${e}` }, 418);
   }
@@ -182,12 +197,11 @@ app.post('/api/webhook/pusher/*', verifyPusherWebhook);
 app.post('/api/webhook/pusher/online', async (c: Context) => {
   const body = await c.req.json();
   for (const event of body.events) {
-    if (event.name == 'member_added') {
-     
-    }
 
-    if (event.name == 'member_removed') {
-     
+    if (event.name == 'member_added') {
+      (await c.env.DB.prepare("update venues set is_online = 1 where id = ?").bind(event.user_id).run());
+    } else if (event.name == 'member_removed') {
+      (await c.env.DB.prepare("update venues set is_online = 0 where id = ?").bind(event.user_id).run());
     }
   }
 })

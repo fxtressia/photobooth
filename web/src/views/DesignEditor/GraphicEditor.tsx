@@ -5,8 +5,20 @@ import Footer from "./components/Footer/Graphic"
 import Toolbox from "./components/Toolbox"
 import EditorContainer from "./components/EditorContainer"
 import ContextMenu from "./components/ContextMenu"
-
+import { useEffect } from "react"
+import { loadRemoteDesign, useRemoteDesignLoader } from "~/utils/load-and-save"
+import { useEditor } from "@layerhub-io/react"
 const GraphicEditor = () => {
+  const searchParams = new URLSearchParams(window.location.search);
+  const designId = searchParams.get("design");
+  const loader = useRemoteDesignLoader();
+  const editor = useEditor();
+  useEffect(() => {
+    if (editor && designId) {
+      loader(designId);
+    }
+
+  }, [designId, editor])
   return (
     <EditorContainer>
       <Navbar />

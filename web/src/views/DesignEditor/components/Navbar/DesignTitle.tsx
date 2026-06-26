@@ -11,8 +11,9 @@ interface State {
 }
 
 const DesignTitle = () => {
-  const [text, setText] = React.useState<string>( "Untitled")
- 
+  const [text, setText] = React.useState<string>( "Untitled Design")
+
+  const { currentDesign, setCurrentDesign } = useDesignEditorContext();
   return (
     <Block
       $style={{
@@ -29,19 +30,17 @@ const DesignTitle = () => {
         <span
         contentEditable="plaintext-only"
         suppressContentEditableWarning={true}
-        onChange={(e) => {
+        onInput={(e) => {
+          
           const newName = e.currentTarget.textContent || "";
-          setText(newName);
-          //setCurrentDesign({ ...currentDesign, name: newName })
+          //setText(newName);
+          setCurrentDesign({ ...currentDesign, name: newName })
         }}
           style={{
         
             fontFamily: "Tenor Sans",
-     
-    
             width: "fit-content",
             fontSize: "0.9rem",
-        
             fontWeight: 300,
           }}
      

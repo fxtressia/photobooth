@@ -27,7 +27,7 @@ export default function Session(is_admin: boolean) {
                 } else {
 
                     return <><div style={{ display: "flex", justifyContent: "space-between" }}>
-                        <p>Waiting for authorization...</p>
+                        { !is_admin && <p>Waiting for authorization...</p>}
                         {(() => {
                             if (is_admin) {
                                 return <></>

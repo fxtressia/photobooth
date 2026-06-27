@@ -1,4 +1,4 @@
-import React, { useState } from "react"
+import React, { useEffect, useRef, useState } from "react"
 import { styled, ThemeProvider, DarkTheme } from "baseui"
 //import type { Theme } from "baseui/theme"
 import { Button, KIND } from "baseui/button"
@@ -36,6 +36,15 @@ const Navbar = () => {
   const remoteSaver = useRemoteDesignSaver();
   const [isFileMenuOpened, setFileMenuOpened] = useState(false);
 
+  const fileMenu = useRef(null);
+  useEffect(() => {
+    document.addEventListener("mousedown", (e) => {
+    
+      if (isFileMenuOpened && !(fileMenu.current?.contains(e.target))) {
+        setFileMenuOpened(false)
+      }
+    })
+  }, [isFileMenuOpened])
   /*
     const parsePresentationJSON = () => {
       const currentScene = editor.scene.exportToJSON()
@@ -242,14 +251,16 @@ const Navbar = () => {
             <div style={{ position: "relative", }}>
               <button style={{ color: "#ffffff", paddingBottom: 0, height: "1.5rem", }} onClick={() => {
                 setFileMenuOpened(!isFileMenuOpened);
+
               }}>
                 File
 
               </button>
 
-              {isFileMenuOpened && <div style={{ position: "absolute", top: "100%", left: "0", zIndex: "1", background: "#6e6eff", padding: "15px", }}>
+              {isFileMenuOpened && <div ref={fileMenu} style={{ position: "absolute", top: "100%", left: "0", zIndex: "1", background: "#6e6eff", padding: "15px", }}>
                 <Button size="compact" kind={KIND.tertiary} style={{ textAlign: "left", color: "white" }} onClick={() => {
                   remoteSaver(designId)
+
                 }}>Save</Button>
                 <input
                   multiple={false}

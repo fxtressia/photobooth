@@ -26,11 +26,11 @@ export interface IDesign {
   id: string
   name: string
   frame: IFrame
-  type: string
+  type?: string
   scenes: any[]
   previews: { id: string; src: string }[]
   metadata: {}
-  published: boolean
+  published?: boolean
 }
 
 export interface IComponent extends Omit<IScene, "preview"> {

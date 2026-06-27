@@ -1,23 +1,43 @@
 
-import type { Editor } from "../../../../layerhub-io/packages/core/dist";
+import type { Editor } from "../../../../../layerhub-io/packages/core/dist";
+import { SavingStateProvider } from "./state"
+export { SavingStateProvider };
 import { loadTemplateFonts } from "~/utils/fonts"
 import { loadVideoEditorAssets } from "~/utils/video"
 import type { IDesign } from "~/interfaces/DesignEditor";
 import type { IScene } from "@layerhub-io/types";
 import { useEditor } from "@layerhub-io/react";
 import useDesignEditorContext from "~/hooks/useDesignEditorContext";
-import { current } from "@reduxjs/toolkit";
 import { useSearchParams } from "react-router";
+import { createContext, useContext, useRef, useState, type Dispatch, type SetStateAction } from "react";
+
+
 export function useTemplateLoader() {
     const editor = useEditor();
-  
+
     return async (payload: IDesign) => {
         if (!editor) return;
         return await loadGraphicTemplate(payload, editor);
-        
+
     };
 }
 
+export function useAutoSaver() {
+    const timer = useRef<any | null>(null);
+    const saver = useRemoteDesignSaver();
+    const { setSavingState } = useSavingState();
+    return (designId: string | null) => (_: any) => {
+        setSavingState(0);
+        //console.log("Got event.")
+        if (timer.current) {
+            clearTimeout(timer.current);
+        }
+        timer.current = setTimeout(() => {
+            saver(designId)
+        }, 7500)
+
+    };
+}
 
 export function useRemoteDesignLoader() {
     const loader = useJSONImporter();
@@ -58,8 +78,9 @@ export function useRemoteDesignSaver() {
     const parser = useJSONParser();
     const { currentDesign } = useDesignEditorContext();
     const [searchParams, setSearchParams] = useSearchParams();
+    const { savingState, setSavingState } = useSavingState();
     return async (id: string | null) => {
-
+        setSavingState(1);
         const json = parser();
         const blob = new Blob([JSON.stringify(json)]);
 
@@ -88,14 +109,17 @@ export function useRemoteDesignSaver() {
                 const { id } = await res.json();
 
                 setSearchParams({ design: id }, { replace: true });
+                
             }
         }
 
         if (!res.ok) {
-            const err = `${res.text()} \n\n${res.status} ${res.statusText}`;
+            const err = Error(`${await res.text()} \n\n${res.status} ${res.statusText}`);
+            setSavingState(err);
+            throw err;
 
-            throw Error(err);
-
+        } else {
+            setSavingState(2);
         }
 
 
@@ -178,5 +202,20 @@ export function parseJSON(editor: Editor, currentDesign: IDesign | null, scenes:
         console.log("NO CURRENT DESIGN")
         return null;
     }
+}
+
+
+interface SavingStateContextType {
+    savingState: number | Error;
+    setSavingState: Dispatch<SetStateAction<number | Error>>;
+}
+export const SavingStateContext = createContext<SavingStateContextType | null>(null);
+
+export function useSavingState() {
+    const enabled = useContext(SavingStateContext);
+
+    if (!enabled) throw new Error('useSavingState must be used within a SavingState.Provider');
+
+    return enabled
 }
 

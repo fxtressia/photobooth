@@ -11,6 +11,7 @@ import { I18nextProvider } from "react-i18next"
 import { TimerProvider } from "@layerhub-io/use-timer"
 
 import "~/translations"
+import { SavingStateProvider } from "~/utils/load-and-save"
 
 const engine = new Styletron()
 
@@ -18,6 +19,7 @@ export default function ({ children }: { children: React.ReactNode }) {
     return (
         <Provider store={store}>
             <DesignEditorProvider>
+                <SavingStateProvider>
                 <TimerProvider>
                     <AppProvider>
                         <ScenifyProvider>
@@ -29,6 +31,7 @@ export default function ({ children }: { children: React.ReactNode }) {
                         </ScenifyProvider>
                     </AppProvider>
                 </TimerProvider>
+                </SavingStateProvider>
             </DesignEditorProvider>
         </Provider>
     )

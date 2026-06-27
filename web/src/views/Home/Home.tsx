@@ -74,9 +74,20 @@ const Home = () => {
             <h2>Your Designs</h2>
             {(() => {
                 if (data.designs.length > 0) {
-                    return data.designs.forEach((data) => {
-                        return (<p></p>)
-                    })
+                    return <div style={{display: "flex", flexWrap: "wrap", gap: "25px"}}>{data.designs.map((data) => {
+                        console.log(data);
+                        let [time, setTime] = useState("");
+                        useEffect(() => {
+                            setTime((new Date(data.created_at * 1000)).toString())
+                        })
+                        return (<Link target="_blank"  key={data.id} style={{ padding: "15px", color: "white", borderRadius: "25px", backgroundColor: "#ab6323"}} to={`/edit?design=${data.id}`}>
+                            <h3>
+                                {data.name || "Untitled Design"}
+                            </h3>
+                            {time}
+                            
+                        </Link>)
+                    })}</div>
                 } else {
                     return (<p>You have not created any designs. Create one, edit it, download the picture, and order your print!</p>)
                 }

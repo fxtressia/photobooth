@@ -22,18 +22,18 @@ export const BASE_ITEMS = [
     name: "Uploads",
   },
 
-  {
+  /*{
     id: "graphics",
     name: "Graphics",
-  },
+  },*/
   {
     id: "customize",
     name: "Customize",
   },
-  {
+  /*{
     id: "pixabay",
     name: "Pixabay",
-  },
+  },*/
   {
     id: "layers",
     name: "Layers",

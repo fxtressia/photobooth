@@ -1,0 +1,1 @@
+ gst-launch-1.0 videotestsrc pattern=smpte ! video/x-raw,width=640,height=480,format=RGB,framerate=30/1 ! videoconvert ! pipewiresink mode=provide stream-properties="properties,node.name=DSLRCamera,media.class=Video/Source,media.role=Camera" client-name="DSLRCamera"

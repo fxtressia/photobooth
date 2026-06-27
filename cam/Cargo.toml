@@ -1,0 +1,13 @@
+[package]
+name = "photobooth-cam"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+eframe = "0.34.3"
+egui = "0.34.3"
+egui_alignments = "0.3.8"
+env_logger = "0.11.10"
+gstreamer = "0.25.2"
+gstreamer-app = "0.25.2"
+gstreamer-video = "0.25.2"

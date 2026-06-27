@@ -53,16 +53,16 @@ function fuzzySearch(items: IFontFamily[], query: string) {
 let fuse: Fuse<IFontFamily> | null = null;
 
 export const fontsReducer = createReducer(initialState, (builder) => {
-  console.log("Hello")!;
+  //console.log("Hello")!;
   builder.addCase(setFonts, (state, { payload }) => {
     state.fonts = payload[0];
     fuse = new Fuse(payload[0], {
       keys: ['family', 'fullName', 'category'], // fields to search
       threshold: 0.4,            // 0 = exact, 1 = match anything
     });
-    console.log("FUSEDDD", payload[0]);
+    //console.log("FUSEDDD", payload[0]);
     state.result = payload[0].slice(0, 100)
-    console.log("FUSED POST", state.result)
+    //console.log("FUSED POST", state.result)
 
   })
 
@@ -70,13 +70,13 @@ export const fontsReducer = createReducer(initialState, (builder) => {
     const { take, skip, query } = payload
     if (query && fuse) {
       const results = fuse.search(query);
-       console.log("PRE FUSED", state.result)
+       //console.log("PRE FUSED", state.result)
       state.result = results.map(({ item }) => item)
-       console.log("POST", state.result)
+       //console.log("POST", state.result)
     } else {
-      console.log("PRE DEFUSED", state.result);
+      //console.log("PRE DEFUSED", state.result);
        state.result = state.fonts.slice(0, (skip + 1) * (take || 100))
-       console.log("POST", state.result)
+       //console.log("POST", state.result)
     }
     // const data = fuzzySearch(state.fonts, "open")
     // console.log(data)

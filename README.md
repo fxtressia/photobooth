@@ -1,5 +1,9 @@
 # A Photobooth Project
+A fun photobooth geared for gigs. This project includes a:
+- software written in Rust for the camera box
+- fullstack application written in TypeScript, to be deployed via Cloudflare Workers
 
+## UX Flow
 Before the event, staff will have to configure the system's
 - list of events they plan to attend within the duration of the system's operation or list of venues where individual machines will run.
 - access pass tiers they choose to offer which can have varying quota or limits based on their prices
@@ -13,8 +17,6 @@ Before or on the day of the event, the user will have to purchase an access pass
     - checking out the tier they'd like to purchase
     - paying for their access pass (At this time, A Photobooth Project does not yet integrate , so users have to upload their proof of payment.) 
 
-
-
 On the D-Day of the event, the UX flow is as follows:
 - The user pays for the service. Digital payment integration is not implemented in this project, so a staff will have to press "Generate Session" button in the Admin UI, generating a session ID, a unique URL, and a QR Code for the user to access. The session row in the D1's database will have its owner set to null. 
 - The user accesses the URL or scans the QR Code (which will also do the former) and logs into Auth0, automatically claiming the session ID as theirs once Auth0 redirected them to our callback URL.
@@ -27,5 +29,9 @@ On the D-Day of the event, the UX flow is as follows:
         - When they access this app, by default, a design using standard aspect ratio (4:6) will be automatically created. They could also press a "choose an existing design" to edit or duplicate a previous design.
 - After leaving the machine, they can log again into the pictures-editing app to continue their progress. Ordering prints will remain available so long as the're an active machine at the moment. Users will have to physically pick the picture the moment they're printed though, so they're have to be present nearby.
 
+Staff will be able to edit the list of events, packages, and more configuration. 
 
-Staff will be able to edit the list of events, packages
+## Copyright
+© 2026 Fxtressia - All Rights Reserved.
+
+This project is licensed with GNU AGPLv3. Please read [LICENSE.md](./LICENSE.md) for terms.

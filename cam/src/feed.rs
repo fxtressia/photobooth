@@ -2,38 +2,97 @@ use gstreamer::{
     glib::object::Cast,
     prelude::{ElementExt, GstBinExt},
 };
+use std::sync::mpsc::Sender;
 use gstreamer_video::VideoFrameExt;
 use std::{
     io::BufRead, process::{Child, Stdio}, sync::{
         Arc,
-        atomic::{AtomicBool, AtomicU8, AtomicU64},
+        atomic::{ AtomicU8, AtomicU64},
     }, time::{Duration, SystemTime}
 };
 
-use crate::{CameraState, Frame};
+use crate::{CameraState, Frame, uploader_processer, ws::InfiniteOrFinite};
 
-pub fn start_thread(tx: std::sync::mpsc::Sender<Frame>, state: Arc<AtomicU8>) {
-    std::thread::spawn(move || {
+
+
+
+#[cfg(target_os = "linux")]
+const CLOCK_ID: rustix::io_uring::ClockId = rustix::io_uring::ClockId::MonotonicRaw;
+#[cfg(not(target_os = "linux"))]
+const CLOCK_ID: rustix::io_uring::ClockId = rustix::io_uring::ClockId::Monotonic;
+pub async fn start(tx: Sender<Frame>, state: Arc<AtomicU8>, session: Arc<std::sync::Mutex<Option<crate::ws::Session>>>, tx_uploader: tokio::sync::mpsc::Sender<uploader_processer::Event>) {
+
+        let is_camera_disabled = std::env::var("DISABLE_CAMERA").is_ok();
         let last_watchdog_reset = Arc::new(AtomicU64::new(0));
         let mut gphoto2_server: Option<Child> = None;
         let mut gstreamer_server: Option<Child> = None;
-        loop {
+        let mut duration_left = None;
+    loop {
+        let mut start = None;
+        if state.load(std::sync::atomic::Ordering::Relaxed) == (CameraState::LiveView as u8) {
+            if let None = duration_left {
+                duration_left = Some(session.lock().unwrap().as_ref().map(|s| s.tier.limits.max_minutes.clone().map(|m| rustix::time::Timespec::try_from(Duration::new(u64::from(m) * 60, 0)).unwrap())).unwrap());
+            }
+            start = Some(rustix::time::clock_gettime(CLOCK_ID));
+        }
+        
+        let res = feed(&tx, &state, &session, is_camera_disabled, last_watchdog_reset.clone(), &mut gphoto2_server, &mut gstreamer_server, &tx_uploader).await;
+        if let Some(InfiniteOrFinite::Finite(duration)) = duration_left {
+            if let Some(start_time) = start {
+                let end = rustix::time::clock_gettime(CLOCK_ID);
+                let elapsed = end.checked_sub(start_time).unwrap_or(rustix::time::Timespec { 
+                    tv_sec: 0, 
+                    tv_nsec: 0
+                });
+                
+                if elapsed >= duration {
+                    println!("Duration limit reached, shutting down...");
+                   
+                    state.store(CameraState::Finished as u8, std::sync::atomic::Ordering::Relaxed);
+                    session.lock().unwrap().take();
+                    break;
+                } else {
+                    duration_left = Some(InfiniteOrFinite::Finite(duration.checked_sub(elapsed).unwrap_or(rustix::time::Timespec { 
+                        tv_sec: 0, 
+                        tv_nsec: 0
+                    })));
+                }
+            }
+        }
+      
+      
+     
+        match res {
+            Ok(should_continue) => {
+                if !should_continue {
+                    break;
+                }
+            }
+            Err(e) => {
+                eprintln!("Error in feed: {}", e);
+                std::thread::sleep(Duration::from_secs(2));
+            }
+        }
+    }
+}
+pub async fn feed(tx: &Sender<Frame>, state: &Arc<AtomicU8>, _session: &Arc<std::sync::Mutex<Option<crate::ws::Session>>>, is_camera_disabled: bool, last_watchdog_reset: Arc<AtomicU64>, gphoto2_server: &mut Option<Child>, gstreamer_server: &mut Option<Child>, tx_uploader: &tokio::sync::mpsc::Sender<uploader_processer::Event>) -> anyhow::Result<bool> {
+   
             match CameraState::from(state.load(std::sync::atomic::Ordering::Relaxed)) {
                 CameraState::Capturing => {
                     std::thread::sleep(Duration::from_secs(1));
-                    let capture_status = std::process::Command::new("gphoto2")
+                    let output = std::process::Command::new("gphoto2")
                         .arg("--capture-image-and-download")
+                        .arg("--stdout")
                         // Use a timestamp to ensure files are never overwritten
-                        .arg("--filename=photobooth_%Y%m%d_%H%M%S.jpg")
-                        .status()
-                        .expect("Failed to execute gphoto2 capture command");
-
-                    if capture_status.success() {
+                        //.arg("--filename=photobooth_%Y%m%d_%H%M%S.jpg")
+                        .output()?;
+                    if output.status.success() {
                         println!("Photo captured and downloaded successfully!");
+                        tx_uploader.send(uploader_processer::Event::ProcessImage(output.stdout)).await?;
                     } else {
                         println!("WARNING: Photo capture failed!");
                     }
-
+                    
                     // STEP 4: Reset the FSM back to Live View
                     println!("Resetting State Machine...");
                     state.store(
@@ -42,31 +101,30 @@ pub fn start_thread(tx: std::sync::mpsc::Sender<Frame>, state: Arc<AtomicU8>) {
                     );
                 }
                 CameraState::LiveView => {
-                    if let Some(mut server) = gphoto2_server {
+                    if let Some(mut server) = gphoto2_server.take() {
                         let _ = server.kill();
                     }
-                    if let Some(mut server) = gstreamer_server {
+                    if let Some(mut server) = gstreamer_server.take() {
                         let _ = server.kill();
                     }
-
-                    let mut new_gphoto2_server = std::process::Command::new("gphoto2")
-                        .arg("--stdout")
-                        .arg("--capture-movie")
-                        .stdout(Stdio::piped())
-                        .stderr(Stdio::piped())
-                        .spawn()
-                        .expect("Failed to start gphoto2 server");
-                    let stderr = new_gphoto2_server.stderr.take().unwrap();
-               
-                    let stdout = new_gphoto2_server.stdout.take().unwrap();
-                    gphoto2_server = Some(new_gphoto2_server);    
-                    let mut new_gstreamer_server = 
+                    if !is_camera_disabled {
+                        let mut new_gphoto2_server = std::process::Command::new("gphoto2")
+                            .arg("--stdout")
+                            .arg("--capture-movie")
+                            .stdout(Stdio::piped())
+                            .stderr(Stdio::piped())
+                            .spawn()?;
+                        let stderr = new_gphoto2_server.stderr.take().ok_or(anyhow::anyhow!("couldn't take new_gphoto2_server's stderr.. does it exist?"))?;
+                
+                        let stdout = new_gphoto2_server.stdout.take().ok_or(anyhow::anyhow!("couldn't take new_gphoto2_server's stdout.. does it exist?"))?;
+                        *gphoto2_server = Some(new_gphoto2_server);    
+                   
+                    let new_gstreamer_server = 
                         std::process::Command::new("gst-launch-1.0")
                             .args("fdsrc fd=0 ! jpegdec ! videoconvert ! video/x-raw,format=RGBA ! pipewiresink mode=provide stream-properties=\"properties,node.name=DSLRCamera,media.class=Video/Source,media.role=Camera\" client-name=\"DSLRCamera\"".split(' '))
                             .stdin(stdout)
-                            .spawn()
-                            .expect("Failed to start gstreamer server");
-                    gstreamer_server = Some(new_gstreamer_server);
+                            .spawn()?;
+                    *gstreamer_server = Some(new_gstreamer_server);
                     let buffer = std::io::BufReader::new(stderr);
                     for line in buffer.lines() {
                         if let Ok(line) = line {
@@ -79,31 +137,35 @@ pub fn start_thread(tx: std::sync::mpsc::Sender<Frame>, state: Arc<AtomicU8>) {
                           
                         }
                     }
-
+                    } else {
+                        *gphoto2_server = None;
+                        *gstreamer_server = None;
+                    }
                     let watchdog_reset_clone = last_watchdog_reset.clone();
-                    let pipeline = match gstreamer::parse::launch(
-                        "pipewiresrc target-object=\"DSLRCamera\" stream-properties=\"props,node.dont-fallback=true,node.dont-reconnect=true\" ! videoconvert ! capsfilter caps=\"video/x-raw,format=RGB\" ! appsink name=photoboothsink drop=true max-buffers=1",
-                    ) {
+                    let pipeline = match gstreamer::parse::launch(&format!(
+                        "pipewiresrc target-object=\"DSLRCamera\" stream-properties=\"props,{},node.dont-reconnect=true\" ! videoconvert ! capsfilter caps=\"video/x-raw,format=RGB\" ! appsink name=photoboothsink drop=true max-buffers=1", if !is_camera_disabled { "node.dont-fallback=true" } else { "" }
+                    )) {
                         Ok(element) => {
                             if let Ok(pipeline) = element.downcast::<gstreamer::Pipeline>() {
                                 pipeline
                             } else {
                                 std::thread::sleep(std::time::Duration::from_secs(2));
-                                continue;
+                                return Ok(true);
                             }
                         }
                         Err(e) => {
-                            println!("Failed to create pipeline: {e:#?}");
+                            let pipeline = format!("Failed to create pipeline: {e:#?}");
+
+                            eprintln!("{}", pipeline);
                             std::thread::sleep(std::time::Duration::from_secs(2));
-                            continue;
+                            anyhow::bail!(pipeline);
                         }
                     };
 
                     let app_sink = pipeline
                         .by_name("photoboothsink")
                         .unwrap()
-                        .downcast::<gstreamer_app::AppSink>()
-                        .unwrap();
+                        .downcast::<gstreamer_app::AppSink>().map_err(|_| anyhow::anyhow!("Failed to downcast photoboothsink to AppSink"))?;
                     let tx_1 = tx.clone();
 
                     app_sink.set_callbacks(
@@ -173,7 +235,7 @@ pub fn start_thread(tx: std::sync::mpsc::Sender<Frame>, state: Arc<AtomicU8>) {
                         println!("playing is err 99 {e:#?}");
                         std::thread::sleep(std::time::Duration::from_secs(2));
                         let _ = pipeline.set_state(gstreamer::State::Null);
-                        continue;
+                        return Ok(true);
                     }
                     last_watchdog_reset.store(
                         SystemTime::now()
@@ -221,16 +283,20 @@ pub fn start_thread(tx: std::sync::mpsc::Sender<Frame>, state: Arc<AtomicU8>) {
                     std::thread::sleep(Duration::from_secs(2));
                 }
                 CameraState::Shutdown => {
-                    if let Some(mut server) = gphoto2_server {
+                    if let Some(mut server) = gphoto2_server.take() {
                         let _ = server.kill();
                     }
-                    if let Some(mut server) = gstreamer_server {
+                    if let Some(mut server) = gstreamer_server.take() {
                         let _ = server.kill();
                     }
 
-                    break;
+                    return Ok(false)
+                }
+                _ => {
+                    // do nothing as the Camera view is disabled
                 }
             }
-        }
-    });
+        
+            return Ok(true);
+
 }

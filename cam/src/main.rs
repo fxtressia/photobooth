@@ -1,15 +1,20 @@
 pub mod feed;
-
+pub mod uploader_processer;
+pub mod ws;
 use std::sync::{
     Arc,
-    atomic::{AtomicBool, AtomicU8},
+    atomic::{AtomicBool, AtomicU8, Ordering},
 };
 
 use egui_alignments::{center_horizontal, center_vertical};
 
 use eframe::egui::{self, ViewportCommand};
 use egui::{ColorImage, TextureHandle, TextureOptions};
+use serde::{Deserialize, Serialize};
+use std::sync::Mutex;
+use tokio::runtime::Runtime;
 
+use crate::ws::Session;
 fn main() -> eframe::Result {
     gstreamer::init().unwrap();
 
@@ -25,9 +30,34 @@ fn main() -> eframe::Result {
     };
 
     let (tx, rx) = std::sync::mpsc::channel::<Frame>();
-    let camera_state = Arc::new(AtomicU8::new(CameraState::LiveView as u8));
-    feed::start_thread(tx, camera_state.clone());
- 
+    let config = Arc::new(std::sync::Mutex::new(None));
+    let config2 = config.clone();
+    let (tx_ws, rx_ws) = std::sync::mpsc::channel::<ws::Event>();
+    let (tx_upload, rx_upload) = tokio::sync::mpsc::channel::<uploader_processer::Event>(8);
+    let tx_upload2 = tx_upload.clone();
+    let camera_state = Arc::new(AtomicU8::new(CameraState::Welcome as u8));
+
+    let session = Arc::new(Mutex::new(None));
+    let sessions = (session.clone(), session.clone(), session.clone());
+    let rt = Runtime::new().expect("Failed to create Tokio runtime");
+    let handle = rt.handle().clone();
+    let client = reqwest::Client::new();
+    let client2 = client.clone();
+    std::thread::spawn(move || {
+        rt.block_on(async {
+            std::future::pending::<()>().await;
+        });
+    });
+    let camstates = (camera_state.clone(), camera_state.clone());
+    handle.spawn(async move {
+        feed::start(tx, camstates.0, sessions.0, tx_upload).await;
+    });
+    handle.spawn(async move {
+        ws::start(tx_ws, config2, sessions.1, client2).await;
+    });
+    handle.spawn(async move {
+        uploader_processer::start(rx_upload, sessions.2, tx_upload2, client, camstates.1).await;
+    });
     eframe::run_native(
         "Photobooth Cam", // unused title
         options,
@@ -35,8 +65,11 @@ fn main() -> eframe::Result {
             Ok(Box::new(App {
                 camera_texture: None,
                 rx,
+                rx_ws,
                 kiosk: std::env::var("IS_KIOSK").is_ok(),
                 camera_state,
+                config,
+                session,
             }))
         }),
     )
@@ -47,6 +80,9 @@ pub enum CameraState {
     LiveView = 0,
     Capturing = 1,
     Shutdown = 2,
+    Welcome = 3,
+    LoggedInHome = 4,
+    Finished = 5,
 }
 
 impl From<u8> for CameraState {
@@ -55,6 +91,9 @@ impl From<u8> for CameraState {
             0 => CameraState::LiveView,
             1 => CameraState::Capturing,
             2 => CameraState::Shutdown,
+            3 => CameraState::Welcome,
+            4 => CameraState::LoggedInHome,
+            5 => CameraState::Finished,
             _ => panic!("Invalid camera state value: {}", value),
         }
     }
@@ -67,14 +106,26 @@ pub struct Frame {
     pub data: Vec<u8>,
 }
 
+#[derive(Serialize, Deserialize, Clone)]
+pub struct VenueConfig {
+    pub service_name: String,
+    pub venue_name: String,
+    pub id: String,
+}
+
 struct App {
     pub rx: std::sync::mpsc::Receiver<Frame>,
+    pub rx_ws: std::sync::mpsc::Receiver<ws::Event>,
     pub camera_texture: Option<TextureHandle>,
     pub camera_state: Arc<AtomicU8>,
     pub kiosk: bool,
+    pub config: Arc<std::sync::Mutex<Option<VenueConfig>>>,
+    pub session: Arc<Mutex<Option<Session>>>,
     //  pub camera_width: usize,
     //  pub camera_height: usize,
 }
+
+impl App {}
 
 impl eframe::App for App {
     fn clear_color(&self, _visuals: &egui::Visuals) -> [f32; 4] {
@@ -101,38 +152,84 @@ impl eframe::App for App {
         custom_window_frame(ui, "Photobooth Project", |ui| {
             center_horizontal(ui, |ui| {
                 center_vertical(ui, |ui| {
-                    if let Some(next_frame) = self.rx.try_iter().last() {
-                        let image = ColorImage::from_rgb(
-                            [next_frame.width, next_frame.height],
-                            &next_frame.data,
-                        );
-                        if let Some(tex) = &mut self.camera_texture {
-                            tex.set(image, TextureOptions::LINEAR);
-                        } else {
-                            self.camera_texture = Some(ui.ctx().load_texture(
-                                "camera_texture",
-                                image,
-                                egui::TextureOptions::LINEAR,
-                            ));
+                    let state = self
+                        .camera_state
+                        .load(std::sync::atomic::Ordering::Relaxed)
+                        .into();
+                    match state {
+                        CameraState::LiveView | CameraState::Capturing => {
+                            if let Some(next_frame) = self.rx.try_iter().last() {
+                                let image = ColorImage::from_rgb(
+                                    [next_frame.width, next_frame.height],
+                                    &next_frame.data,
+                                );
+                                if let Some(tex) = &mut self.camera_texture {
+                                    tex.set(image, TextureOptions::LINEAR);
+                                } else {
+                                    self.camera_texture = Some(ui.ctx().load_texture(
+                                        "camera_texture",
+                                        image,
+                                        egui::TextureOptions::LINEAR,
+                                    ));
+                                }
+                            }
+
+                            if let Some(tex) = &self.camera_texture {
+                                ui.add(
+                                    egui::Image::new(tex)
+                                        .maintain_aspect_ratio(true)
+                                        .fit_to_exact_size(ui.content_rect().size()),
+                                );
+                                ui.ctx()
+                                    .request_repaint_after(std::time::Duration::from_millis(33)); // Request a repaint to update the image
+                            } else {
+                                ui.spinner();
+                            }
+                        }
+
+                        CameraState::Shutdown => {
+                            ui.label("Shutting down...");
+                        }
+                        CameraState::Welcome | CameraState::Finished => {
+                            if let Some(event) = self.rx_ws.try_iter().last() {
+                                match event {
+                                    ws::Event::Connected => {}
+                                    ws::Event::Login => {
+                                        self.camera_state.store(
+                                            CameraState::LoggedInHome as u8,
+                                            Ordering::Relaxed,
+                                        );
+                                    }
+                                    _ => {}
+                                }
+                            }
+                            match state {
+                                CameraState::Welcome => {
+                                    ui.label("Welcome to the Photobooth!");
+                                }
+                                CameraState::Finished => {
+                                    ui.label("Finished");
+                                }
+                                _ => unreachable!(),
+                            }
+
+                            ui.label("Hello! Let's start!");
+                            if let Ok(config) = self.config.try_lock() {
+                                if let Some(config) = config.as_ref() {
+                                    ui.label(format!(
+                                        "Press \"Start session in {}\" in {}'s UI!",
+                                        config.venue_name, config.service_name
+                                    ));
+                                }
+                            }
+
+                            ui.label("Finished");
+                        }
+                        CameraState::LoggedInHome => {
+                            ui.label("Logged In Home");
                         }
                     }
-
-                    if let Some(tex) = &self.camera_texture {
-                        ui.add(
-                            egui::Image::new(tex)
-                                .maintain_aspect_ratio(true)
-                                .fit_to_exact_size(ui.content_rect().size()),
-                        );
-                        ui.ctx()
-                            .request_repaint_after(std::time::Duration::from_millis(33)); // Request a repaint to update the image
-                    } else {
-                        ui.spinner();
-                    }
                     ui.label("Photobooth Project");
-                    /*ui.horizontal(|ui| {
-                        ui.label("egui theme:");
-                        egui::widgets::global_theme_preference_buttons(ui);
-                    });*/
                 });
             });
         });

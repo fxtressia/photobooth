@@ -79,7 +79,7 @@ app.get('/api/me/home', home_feed);
 app.get('/api/me/designs', async (c: Context) => {
   const user = getUser(c);
   const { results } = await c.env.DB.prepare("select * from designs where user_auth0_id = ?").bind(user.sub).all();
-  return c.json(results.map((e) => { return {...e, current_state: undefined, history_stack: undefined};}));
+  return c.json(results.map((e) => { return { ...e, current_state: undefined, history_stack: undefined }; }));
 })
 app.get('/api/me/designs/:id', async (c: Context) => {
   const user = getUser(c);
@@ -118,9 +118,9 @@ app.post('/api/me/designs/new', async (c: Context) => {
     const aspectRatioBlob = fd.get("aspect_ratio");
     const historyStackBlob = fd.get("history_stack");
     const currentStateBlob = fd.get("current_state");
-    if (!(aspectRatioBlob?.constructor?.name == "String") || !(historyStackBlob instanceof Blob) || !(currentStateBlob instanceof Blob)){
-     // console.log(!(aspectRatioBlob instanceof String), !(historyStackBlob instanceof Blob), !(currentStateBlob instanceof Blob), aspectRatioBlob?.constructor?.name);
-      return c.json({msg: "Missing or mismatching parameters"}, 400);
+    if (!(aspectRatioBlob?.constructor?.name == "String") || !(historyStackBlob instanceof Blob) || !(currentStateBlob instanceof Blob)) {
+      // console.log(!(aspectRatioBlob instanceof String), !(historyStackBlob instanceof Blob), !(currentStateBlob instanceof Blob), aspectRatioBlob?.constructor?.name);
+      return c.json({ msg: "Missing or mismatching parameters" }, 400);
     }
     await c.env.DB.prepare("insert into designs (id, user_auth0_id, aspect_ratio, history_stack, current_state) values (?, ?, ?, ?, ?)").bind(id, user.sub, Number(aspectRatioBlob), await historyStackBlob.arrayBuffer(), await currentStateBlob.arrayBuffer()).run();
   } else {
@@ -151,20 +151,19 @@ app.get('/api/me/sessions', async (c: Context) => {
   return c.json(sessions);
 })
 
-
-
 app.post('/api/venue/auth', async (c: Context) => {
-  const key = c.req.header("Authorization");
-  if (!key) return c.json({ "msg": "unauthorized" }, 401);
+  let key = c.req.header("Authorization");
+  if (!key || !key.startsWith("Bearer ")) return c.json({ "msg": "unauthorized" }, 401);
+  key = key.slice(7);
   const socketId = c.req.query("socket_id");
   if (!socketId) {
     return c.json({ "msg": "Bad Request" }, 400);
   }
-  const venue = (await c.env.DB.prepare("select * from venues").all()).results.find((a) => a.apikey == hashAPIKey(key));
+  const venue = (await c.env.DB.prepare("select * from venues where api_key = ?").bind(hashAPIKey(key)).first());
   if (!venue) return c.json({ "msg": "venue not found" }, 400);
 
   const presence = (() => {
-    const channel_data = JSON.stringify({ user_id: venue });
+    const channel_data = JSON.stringify({ user_id: venue.id });
     const stringToSign = `${socketId}:presence-venues:${channel_data}`;
     const signature = crypto
       .createHmac('sha256', process.env.PUSHER_APP_SECRET)
@@ -175,12 +174,13 @@ app.post('/api/venue/auth', async (c: Context) => {
   })();
 
   const user = (() => {
-    const user_data = JSON.stringify({ id: venue });
+    const user_data = JSON.stringify({ id: venue.id });
     const stringToSign = `${socketId}::user::${user_data}`;
     const signature = crypto
       .createHmac('sha256', process.env.PUSHER_APP_SECRET)
       .update(stringToSign)
       .digest('hex');
+
     return {
       auth: `${process.env.PUSHER_APP_KEY}:${signature}`,
       user_data,

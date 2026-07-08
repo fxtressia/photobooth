@@ -47,7 +47,7 @@ export const DesignEditorContext = React.createContext<ISceneEditorContext>({
   setCurrentDesign: () => {},
   isSidebarOpen: true,
   setIsSidebarOpen: () => {},
-  editorType: "NONE",
+  editorType: "GRAPHIC",
   setEditorType: () => {},
   displayPlayback: false,
   setDisplayPlayback: () => {},

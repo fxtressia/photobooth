@@ -12,8 +12,7 @@ Before or on the day of the event, the user will have to purchase an access pass
     - logging into Auth0
     - checking out the tier they'd like to purchase
     - paying for their access pass (At this time, A Photobooth Project does not yet integrate , so users have to upload their proof of payment.) 
-        - 
-- 
+
 
 
 On the D-Day of the event, the UX flow is as follows:

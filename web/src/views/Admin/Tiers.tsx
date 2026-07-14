@@ -19,7 +19,7 @@ export default function Tiers() {
                     return <div key={"c" + id} style={{ background: "#f8ff93", padding: "15px", borderRadius: "5px" }}>
                         <h3>{val.name}</h3>
                         <p><b>Price:</b> {val.price}</p>
-                        <p><b>Maximum time:</b> {val["time-mins"]} minutes </p> 
+                        <p><b>Maximum time:</b> {val["timemins"]} minutes </p> 
                         <p><b>Maximum number of pictures that may be taken:</b> {val.pics}</p>
 
                     </div>

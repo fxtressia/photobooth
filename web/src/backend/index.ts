@@ -2,7 +2,7 @@ import { Context, Hono } from 'hono'
 import { v2 as cloudinary } from "cloudinary"
 import { auth0, requiresAuth, getUser } from '@auth0/auth0-hono'
 import { monotonicFactory } from "ulidx";
-import { admins } from "../config";
+import { admins, brandName, tiers } from "../config";
 import ssr from './ssr';
 import crypto from "node:crypto";
 import home_feed from './home_feed';
@@ -200,8 +200,21 @@ app.post('/api/venue/auth', async (c: Context) => {
     };
   })();
 
+
+
+  /*
+  pub struct VenueConfig {
+    pub service_name: String,
+    pub venue_name: String,
+    pub id: String,
+}
+  */
   return c.json({
-    presence, user
+    presence, user, metadata: {
+      service_name: brandName,
+      venue_name: venue.name,
+      id: venue.id
+    }
   });
 
 })
@@ -249,6 +262,8 @@ app.post('/api/webhook/pusher/online', async (c: Context) => {
       (await c.env.DB.prepare("update venues set is_online = 0 where id = ?").bind(event.user_id).run());
     }
   }
+
+  return c.text("OK", 200);
 })
 
 
@@ -258,7 +273,6 @@ app.post('/api/me/venue/unlock', async (c: Context) => {
   const venue = c.req.query("venue");
 
   if (!id || !venue) {
-
     return c.json({
       msg: "Bad Request"
     }, 400);
@@ -274,9 +288,11 @@ app.post('/api/me/venue/unlock', async (c: Context) => {
   const body = JSON.stringify({
     data: JSON.stringify({
       session: {
-        user_auth0_id: session.user_auth0_id,
+        user: {
+          auth0_id: session.user_auth0_id,
+        },
         id: session.id,
-        tier: session.tier,
+        tier: tiers[session.tier],
       }
     }),
     channel: `#server-to-user-${venue}`,
@@ -313,7 +329,7 @@ app.post('/api/me/venue/unlock', async (c: Context) => {
 
 
 app.post('/api/admin/sessions/generate', async (c) => {
- 
+
   const { location, tier } = await c.req.json();
   const owner_id = c.req.param("owner_id") ? c.req.param("owner_id") : null;
 
@@ -330,7 +346,7 @@ app.get('/api/admin/sessions', adminSessionsFeed);
 app.post('/api/admin/venues/create', async (c: Context) => {
   const data = await c.req.json();
 
-  if (!data || !data.name) return c.json({msg: "Bad request"}, 400)
+  if (!data || !data.name) return c.json({ msg: "Bad request" }, 400)
   const { rawKey, hashedKey } = await generateApiKey();
   const id = ulid();
 
@@ -347,7 +363,7 @@ app.post('/api/admin/venues/delete', async (c: Context) => {
 
 app.patch('/api/admin/venues/reset-token', async (c: Context) => {
   const data = await c.req.json();
-  const {rawKey, hashedKey } = await generateApiKey();
+  const { rawKey, hashedKey } = await generateApiKey();
   await c.env.DB.prepare("update venues set hash_api_token = ? where id = ?").bind(hashedKey, data.id).run();
   return c.json({ rawKey });
 })
@@ -355,7 +371,7 @@ app.patch('/api/admin/venues/reset-token', async (c: Context) => {
 app.patch('/api/admin/venues/update', async (c) => {
   const data = await c.req.json();
   if (!(data?.name || data?.id)) {
-    return c.json({msg: "Bad Request"}, 400);
+    return c.json({ msg: "Bad Request" }, 400);
   }
   await c.env.DB.prepare("update venues set name = ? where id = ?").bind(data.name, data.id).run();
 

@@ -58,7 +58,8 @@ export default function Session(is_admin: boolean) {
                             }} target="_blank" href={data.payment_proof}>See Proof of Payment</a>
 
                             <form action={`/api/admin/${data.authorized ? 'de' : ''}verify-payment?id=${data.id}`} method="post">
-                                <button disabled={!verifyEnabled}  style={{ backgroundColor: "#fdffdc", width: "stretch", textAlign: "center", padding: "5px", borderRadius: "5px" }}>
+                                <button disabled={!verifyEnabled}  style={{ 
+                                    cursor: "pointer", backgroundColor: "#fdffdc", width: "stretch", textAlign: "center", padding: "5px", borderRadius: "5px" }}>
                                     {data.authorized ? 'Dev' : 'V'}erify Payment
                                 </button>
                             </form></>;

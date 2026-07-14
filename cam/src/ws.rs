@@ -22,7 +22,21 @@ pub struct Tier {
     pub id: String,
     pub name: String,
     pub limits: Limits,
+}#[derive(Deserialize, Serialize)]
+pub struct Limits {
+    pub max_minutes: Option<u8>,
+    pub max_photos: Option<u8>,
+    pub max_total_size: Option<usize>,
+    pub auto_click: Option<u8>,
 }
+
+#[derive(Deserialize, Serialize)]
+pub struct Session {
+    pub user: User,
+    pub id: String,
+    pub tier: Tier,
+}
+
 
 #[derive(Deserialize, Serialize)]
 pub struct PusherEvent<A> {
@@ -61,19 +75,10 @@ pub struct PusherConnectionEstablished {
     pub activity_timeout: usize,
 }
 
-#[derive(Deserialize, Serialize)]
-pub struct Limits {
-    pub max_minutes: Option<u8>,
-    pub max_photos: Option<u8>,
-    pub max_total_size: Option<usize>,
-    pub auto_click: Option<u8>,
-}
 
 #[derive(Deserialize, Serialize)]
-pub struct Session {
-    pub user: User,
-    pub id: String,
-    pub tier: Tier,
+pub struct SessionEvent {
+    pub session: Session
 }
 
 pub struct Image {}
@@ -136,7 +141,7 @@ pub async fn websocket(
             _ => continue,
         };
         let event: PusherEvent<String> = serde_json::from_str(&raw_event)?;
-
+        println!("{:#?} {:#?}", event.event, event.data);
         match event.event.as_str() {
             "pusher:connection_established" => {
                 let data: PusherConnectionEstablished = serde_json::from_str(&event.data)?;
@@ -156,6 +161,9 @@ pub async fn websocket(
                     )));
                 }
                 let body = res.json::<AuthResponseBody>().await?;
+                let id = body.metadata.id.clone();
+                let auth = body.user.auth.clone();
+                let presence_channel_data = body.presence.channel_data.clone();
                 config.lock().unwrap().replace(body.metadata);
 
                 let signin_frame = PusherEvent {
@@ -170,25 +178,44 @@ pub async fn websocket(
                         channel_data: Some(body.presence.channel_data),
                     },
                 };
+                let server_to_user_frame = PusherEvent {
+                    event: "pusher:subscribe".to_owned(),
+                    data: SubscribePayload {
+                        channel: format!("#server-to-user-{}", id),
+                        auth: Some(auth),
+                        channel_data: Some(presence_channel_data),
+                    },
+                };
                 write
                     .send(Message::Text(serde_json::to_string(&signin_frame)?.into()))
                     .await?;
                 write
                     .send(Message::Text(serde_json::to_string(&frame)?.into()))
                     .await?;
+                write
+                    .send(Message::Text(
+                        serde_json::to_string(&server_to_user_frame)?.into(),
+                    ))
+                    .await?;
             }
-            "pusher:user_notification" => {
-                let upstream_session: PusherEvent<Session> = serde_json::from_str(&event.data)?;
+
+            "booth-login" => {
+                let upstream_session: SessionEvent = serde_json::from_str(&event.data)?;
+                let upstream_session = upstream_session.session;
                 let mut session = session.lock().map_err(|e| {
                     anyhow::anyhow!("Failed to acquire session lock. We got poisoned: {}", e)
                 })?;
                 if let None = session.as_ref() {
-                    session.replace(upstream_session.data);
+                    println!(
+                        "Received login notification for user {} with session {}",
+                        upstream_session.user.auth0_id, upstream_session.id
+                    );
+                    session.replace(upstream_session);
                     tx.send(Event::Login)?;
                 } else {
                     println!(
                         "Received a user notification {}, but we already have a session. Ignoring it.",
-                        upstream_session.data.id
+                        upstream_session.id
                     );
                 }
             }

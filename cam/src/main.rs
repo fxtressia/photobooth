@@ -3,12 +3,11 @@ pub mod uploader_processer;
 pub mod ws;
 use std::sync::{
     Arc,
-    atomic::{ AtomicU8, Ordering},
+    atomic::{AtomicU8, Ordering},
 };
 
 use egui_alignments::{center_horizontal, center_vertical};
 pub mod utils;
-
 
 use eframe::egui::{self, ViewportCommand};
 use egui::{ColorImage, TextureHandle, TextureOptions};
@@ -18,6 +17,9 @@ use tokio::runtime::Runtime;
 
 use crate::ws::Session;
 fn main() -> eframe::Result {
+    let kiosk = std::env::var("ENABLE_KIOSK")
+        .map(|v| v == "1")
+        .unwrap_or(false);
     let env = ws::Env {
         pusher_ws_region: std::env::var("PUSHER_WS_REGION").expect("PUSHER_WS_REGION is not found"),
         pusher_ws_key: std::env::var("PUSHER_WS_KEY").expect("PUSHER_WS_KEY is not found"),
@@ -73,7 +75,7 @@ fn main() -> eframe::Result {
                 camera_texture: None,
                 rx,
                 rx_ws,
-                kiosk: std::env::var("IS_KIOSK").is_ok(),
+                kiosk,
                 camera_state,
                 config,
                 session,
@@ -156,88 +158,94 @@ impl eframe::App for App {
                 );
             }
         });
-        custom_window_frame(ui, "Photobooth Project", |ui| {
-            center_horizontal(ui, |ui| {
-                center_vertical(ui, |ui| {
-                    let state = self
-                        .camera_state
-                        .load(std::sync::atomic::Ordering::Relaxed)
-                        .into();
-                    match state {
-                        CameraState::LiveView | CameraState::Capturing => {
-                            if let Some(next_frame) = self.rx.try_iter().last() {
-                                let image = ColorImage::from_rgb(
-                                    [next_frame.width, next_frame.height],
-                                    &next_frame.data,
-                                );
-                                if let Some(tex) = &mut self.camera_texture {
-                                    tex.set(image, TextureOptions::LINEAR);
-                                } else {
-                                    self.camera_texture = Some(ui.ctx().load_texture(
-                                        "camera_texture",
-                                        image,
-                                        egui::TextureOptions::LINEAR,
-                                    ));
-                                }
-                            }
+        if self.kiosk {
+            self.ui(ui)
+        } else {
+            custom_window_frame(ui, "Photobooth Project", |ui| self.ui(ui))
+        }
+    }
+}
 
-                            if let Some(tex) = &self.camera_texture {
-                                ui.add(
-                                    egui::Image::new(tex)
-                                        .maintain_aspect_ratio(true)
-                                        .fit_to_exact_size(ui.content_rect().size()),
-                                );
-                                ui.ctx()
-                                    .request_repaint_after(std::time::Duration::from_millis(33)); // Request a repaint to update the image
+impl App {
+    fn ui(&mut self, ui: &mut egui::Ui) {
+        center_horizontal(ui, |ui| {
+            center_vertical(ui, |ui| {
+                let state = self
+                    .camera_state
+                    .load(std::sync::atomic::Ordering::Relaxed)
+                    .into();
+                match state {
+                    CameraState::LiveView | CameraState::Capturing => {
+                        if let Some(next_frame) = self.rx.try_iter().last() {
+                            let image = ColorImage::from_rgb(
+                                [next_frame.width, next_frame.height],
+                                &next_frame.data,
+                            );
+                            if let Some(tex) = &mut self.camera_texture {
+                                tex.set(image, TextureOptions::LINEAR);
                             } else {
-                                ui.spinner();
+                                self.camera_texture = Some(ui.ctx().load_texture(
+                                    "camera_texture",
+                                    image,
+                                    egui::TextureOptions::LINEAR,
+                                ));
                             }
                         }
 
-                        CameraState::Shutdown => {
-                            ui.label("Shutting down...");
-                        }
-                        CameraState::Welcome | CameraState::Finished => {
-                            if let Some(event) = self.rx_ws.try_iter().last() {
-                                match event {
-                                    ws::Event::Connected => {}
-                                    ws::Event::Login => {
-                                        self.camera_state.store(
-                                            CameraState::LoggedInHome as u8,
-                                            Ordering::Relaxed,
-                                        );
-                                    }
-                                    _ => {}
-                                }
-                            }
-                            match state {
-                                CameraState::Welcome => {
-                                    ui.label("Welcome to the Photobooth!");
-                                }
-                                CameraState::Finished => {
-                                    ui.label("Finished");
-                                }
-                                _ => unreachable!(),
-                            }
-
-                            ui.label("Hello! Let's start!");
-                            if let Ok(config) = self.config.try_lock() {
-                                if let Some(config) = config.as_ref() {
-                                    ui.label(format!(
-                                        "Press \"Start session in {}\" in {}'s UI!",
-                                        config.venue_name, config.service_name
-                                    ));
-                                }
-                            }
-
-                            ui.label("Finished");
-                        }
-                        CameraState::LoggedInHome => {
-                            ui.label("Logged In Home");
+                        if let Some(tex) = &self.camera_texture {
+                            ui.add(
+                                egui::Image::new(tex)
+                                    .maintain_aspect_ratio(true)
+                                    .fit_to_exact_size(ui.content_rect().size()),
+                            );
+                            ui.ctx()
+                                .request_repaint_after(std::time::Duration::from_millis(33)); // Request a repaint to update the image
+                        } else {
+                            ui.spinner();
                         }
                     }
-                    ui.label("Photobooth Project");
-                });
+
+                    CameraState::Shutdown => {
+                        ui.label("Shutting down...");
+                    }
+                    CameraState::Welcome | CameraState::Finished => {
+                        ui.ctx()
+                            .request_repaint_after(std::time::Duration::from_millis(33));
+                        for event in self.rx_ws.try_iter() {
+                            match event {
+                                ws::Event::Connected => {}
+                                ws::Event::Login => {
+                                    self.camera_state
+                                        .store(CameraState::LoggedInHome as u8, Ordering::Relaxed);
+                                }
+                                _ => {}
+                            }
+                        }
+
+                        match state {
+                            CameraState::Welcome => {
+                                ui.label("Welcome to the Photobooth!");
+                                ui.label("Hello! Let's start!");
+                                if let Ok(config) = self.config.try_lock() {
+                                    if let Some(config) = config.as_ref() {
+                                        ui.label(format!(
+                                            "Press \"Start session in {}\" in {}'s UI!",
+                                            config.venue_name, config.service_name
+                                        ));
+                                    }
+                                }
+                            }
+                            CameraState::Finished => {
+                                ui.label("Finished");
+                            }
+                            _ => unreachable!(),
+                        }
+                    }
+                    CameraState::LoggedInHome => {
+                        ui.label("Logged In Home");
+                    }
+                }
+                ui.label("Photobooth Project");
             });
         });
     }

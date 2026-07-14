@@ -1,60 +1,32 @@
-import { Link, useLoaderData } from "react-router";
-import { brandName, tiers } from "~/config";
-import Session from "~/views/Session";
+import { Link, Outlet, useLocation, } from "react-router";
+import { brandName,  } from "~/config";
+
 
 const Admin = () => {
-    const data = useLoaderData();
-    
-    if ("status" in data || "text" in data) {
-        let message;
-        try {
-            const json = JSON.parse(data.text);
-            message = <p><b>{json.error}:</b> <span>{json.error_description}</span></p>
+    const location = useLocation();
+    const current = location.pathname.split('/').pop();
 
-        } catch (e) {
-            message = <p>{data.text}</p>
-        }
-        return <><h1>Oops! Server says, "Error {data.status}."</h1>
-            {message}
-
-        </>
-    }
-    return <div>
+    return <div style={{display: "flex", flexDirection: "column", gap: "15px"}}>
         <div style={{
             display: "flex", flexDirection: "column", gap:
                 "25px"
         }}>
             <h1>{brandName}</h1>
-          
-            <Link to={`/admin/session/generate${(() => {
-                if (Object.keys(tiers).length == 1) {
-                    return "?tier=" + Object.keys(tiers)[0];
-                }
-                return "";
-            })()}`} style={{
-                width: "stretch", paddingTop: "5px", paddingBottom: "5px", paddingLeft: "15px", paddingRight: "15px",
-                color: "white", fontWeight: "bold", fontSize: "1.5rem", backgroundColor: "#71ab23"
-            }}>
-                Generate session {(() => {
-                    if (Object.keys(tiers).length == 1) {
-                        // @ts-expect-error
-                        return '"' + tiers[Object.keys(tiers)[0]].name + '"';
-                    }
-                })()}
-            </Link>
-            
-            <h3>Pending Authorization</h3>
-            {
-                data.sessions.pending.map(Session(true))
-            }
-            <h3>Authorized Session</h3>
-            {
-                data.sessions.authorized.map(Session(true))
-            }
-            <p style={{ textAlign: "center" }}>Return to <Link to="/" style={{ fontWeight: "bold", textDecoration: "underline" }}>home</Link></p>
-            <></>
-        </div>
+            <div style={{display: "flex", flexDirection: "column", gap: "5px"}}>
+                <div style={{ display: "flex", justifyContent: "space-between", backgroundColor: "#71ab23", color: "white",  }}>
+                    <Link to="/admin" style={{ textAlign: "center", flexGrow: "1", padding: "5px", paddingLeft: "25px", paddingRight: "25px",  color: "white", fontWeight: "bold", backgroundColor: current == "admin" ? "#87cf2a" : undefined }}>Sessions</Link>
+                    <Link to="/admin/venues" style={{ textAlign: "center", flexGrow: "1", padding: "5px", paddingLeft: "25px", paddingRight: "25px", color: "white", fontWeight: "bold", backgroundColor: current == "venues" ? "#87cf2a" : undefined }}>Venues</Link>
+                    <Link to="/admin/tiers" style={{ textAlign: "center", flexGrow: "1", padding: "5px", paddingLeft: "25px", paddingRight: "25px", color: "white", fontWeight: "bold", backgroundColor: current == "tiers" ? "#87cf2a" : undefined }}>Tiers</Link>
+                    <Link to="/admin/config" style={{ textAlign: "center", flexGrow: "1", padding: "5px", paddingLeft: "25px", paddingRight: "25px", color: "white", fontWeight: "bold", backgroundColor: current == "config" ? "#87cf2a" : undefined }}>Config</Link>
+                </div>
+              </div>
 
+         
+        </div>
+        <div>
+            <Outlet />
+        </div>
+        <p style={{ textAlign: "center" }}>Return to <Link to="/" style={{ fontWeight: "bold", textDecoration: "underline" }}>home</Link></p>
 
     </div>
 }

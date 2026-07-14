@@ -8,7 +8,7 @@ export default async function homeFeed(c: Context) {
     user = getUser(c);
   } catch (e) {
     if ((e instanceof Error && e.message == "Missing session")) {
-      return {};
+      return;
     } else {
       throw e;
     }
@@ -16,6 +16,12 @@ export default async function homeFeed(c: Context) {
   if (user == undefined) {
     throw Error("User can't be undefined! See home_feed.ts");
   }
+  const online_venues = (await c.env.DB.prepare("select * from venues where is_online = 1").all()).results.map((c) => {
+    return {
+      ...c,
+      hash_api_token: undefined,
+    };
+  });
   const designs = (await c.env.DB.prepare("select * from designs where user_auth0_id = ?").bind(user.sub).all()).results;
   const sessions = (await c.env.DB.prepare("select * from sessions where user_auth0_id = ?").bind(user.sub).all()).results;
 
@@ -37,6 +43,6 @@ export default async function homeFeed(c: Context) {
 
 
 
-  return c.json({ sub: user.sub, admin: admins.includes(user.sub), designs, sessions: { authorized, pending, finished,  } });
+  return { sub: user.sub, admin: admins.includes(user.sub), designs, sessions: { authorized, pending, finished, }, online_venues };
 
 }

@@ -22,7 +22,9 @@
    // "noFallthroughCasesInSwitch": true,
   
     "paths": {
-      "~/*": ["./src/*"]
+      "~/*": [
+        "./src/*"
+      ]
     }
   },
   "include": ["./src/*.tsx", "./src/utils/*.ts", "./src/views/*.ts", "src/utils/load-and-save.ts"]

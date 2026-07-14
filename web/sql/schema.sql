@@ -14,14 +14,13 @@ CREATE TABLE IF NOT EXISTS designs (
     history_stack BLOB, 
     aspect_ratio REAL NOT NULL DEFAULT 1.5,
     FOREIGN KEY (user_auth0_id) REFERENCES users (auth0_id) ON DELETE CASCADE
-    
 ) STRICT;
 CREATE INDEX IF NOT EXISTS index_designs_user ON designs (user_auth0_id);
 
 CREATE TABLE IF NOT EXISTS sessions (
     id TEXT PRIMARY KEY NOT NULL,
     user_auth0_id TEXT,
-    venue_location INTEGER,
+    venue_location TEXT,
     created_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now')),
     finished INTEGER DEFAULT 0,
     authorized INTEGER NOT NULL,
@@ -32,3 +31,10 @@ CREATE TABLE IF NOT EXISTS sessions (
 ) STRICT;
 
 CREATE INDEX IF NOT EXISTS index_sessions_user ON sessions (user_auth0_id);
+
+CREATE TABLE IF NOT EXISTS venues (
+    name TEXT NOT NULL,
+    id TEXT PRIMARY KEY NOT NULL,
+    hash_api_token TEXT KEY NOT NULL,
+    is_online INTEGER NOT NULL DEFAULT 0,
+) STRICT;

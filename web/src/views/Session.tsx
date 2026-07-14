@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Form } from "react-router";
+
 import { tiers } from "~/config";
 
 export default function Session(is_admin: boolean) {
@@ -13,7 +13,7 @@ export default function Session(is_admin: boolean) {
         
         
 
-        const session = (<div key={data.id} style={{ display: "flex", flexDirection: "column", gap: "25px", backgroundColor: data.authorized ? "#b5fb5a" :  "#f5ff63", borderRadius: "15px", padding: "10px" }}><div><h4>
+        const session = (<div key={data.id} style={{ display: "flex", flexDirection: "column", gap: "25px", backgroundColor: data.authorized ? "#b5fb5a" :  "#f8ff93", borderRadius: "15px", padding: "10px" }}><div><h4>
             {tiers[data.tier].name} - Purchase Date: {dateStr}
 
         </h4>
@@ -45,17 +45,20 @@ export default function Session(is_admin: boolean) {
                 }
             })()}
             </div>
-            <div style={{display: "flex", gap:"5px", flexDirection: "column"}}>
+            <div style={{display: "flex", gap:"5px", }}>
                 {(() => {
                     if (is_admin) {
                         return <>
                             <a onClick={() => { setVerifyEnabled(true) }} style={{
                                 textAlign: "center",
-                                width: "stretch", backgroundColor: "#f8fdb5", padding: "5px", borderRadius: "5px"
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                                width: "stretch", backgroundColor: "#fdffdc", padding: "5px", borderRadius: "5px"
                             }} target="_blank" href={data.payment_proof}>See Proof of Payment</a>
 
                             <form action={`/api/admin/${data.authorized ? 'de' : ''}verify-payment?id=${data.id}`} method="post">
-                                <button disabled={!verifyEnabled}  style={{ backgroundColor: "#f8fdb5", width: "stretch", textAlign: "center", padding: "5px", borderRadius: "5px" }}>
+                                <button disabled={!verifyEnabled}  style={{ backgroundColor: "#fdffdc", width: "stretch", textAlign: "center", padding: "5px", borderRadius: "5px" }}>
                                     {data.authorized ? 'Dev' : 'V'}erify Payment
                                 </button>
                             </form></>;

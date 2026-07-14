@@ -1,7 +1,15 @@
 # A Photobooth Project
-A fun photobooth geared for gigs. This project includes a:
-- software written in Rust for the camera box
-- fullstack application written in TypeScript, to be deployed via Cloudflare Workers
+A fun IoT photobooth geared for gigs. This project includes a:
+- kiosk software written in Rust using `egui`, `gphoto2`, and Pipewire for the camera box
+- fullstack application written in TypeScript, to be deployed via Cloudflare Workers, consisting of two sub-applications:
+    - a custom SSR dashboard using React + React Router (SSR logic is written manually instead of using React Router as a framework)
+    - a Canva-like SPA application based on [Fabric.js](https://fabricjs.com/) and [Layerhub.io](https://github.com/layerhub.io)
+
+## Setting up
+You need to download the ModNET ONNX model for the kiosk application.
+```
+gdown https://drive.google.com/file/d/1cgycTQlYXpTh26gB9FTnthE7AvruV8hd/view
+```
 
 ## UX Flow
 Before the event, staff will have to configure the system's
@@ -31,6 +39,47 @@ On the D-Day of the event, the UX flow is as follows:
 
 Staff will be able to edit the list of events, packages, and more configuration. 
 
+## Configuration
+Unfortunately, configuration is still WIP. It is subject to change in the future.
+
+### Cloudflare Workers Web Application
+The environment variables needed are as follows:
+| Name | Description |
+| -- | -- |
+| `AUTH0_DOMAIN` | | 
+| `AUTH0_CLIENT_ID`| |
+| `AUTH0_CLIENT_SECRET` | |
+| `APP_BASE_URL` | Base URL of your Workers web application | 
+| `PUSHER_APP_ID` | | 
+| `PUSHER_APP_KEY` | |
+| `PUSHER_APP_SECRET` | |
+| `PUSHER_APP_REGION` | |
+| `TALLY_WEBHOOK_API_KEY` | |
+| `CLOUDINARY_API_KEY` | |
+| `CLOUDINARY_API_SECRET` | |
+| `CLOUDINARY_CLOUD_NAME` | | 
+
+
+### Kiosk application
+The environment variables needed are as follows:
+| Name | Description |
+| -- | -- |
+| `DISABLE_CAMERA` | This disables gPhoto2 live view and use whatever source Pipewire picks automatically. |
+| `PUSHER_WS_HOST` | In the form of `api-{region}.pusher.com` |  
+| `PUSHER_WS_KEY` | |
+| `CLOUDINARY_CLOUD_NAME` | |
+| `CLOUDINARY_PRESET` | |
+| `BACKEND_API_HOST` | The public URL of the Worker web application. | 
+| `BACKEND_API_KEY` |  |
+The best way to set this is in a Bash script that exports your secrets as environmental variables, the way the kiosk application reads the secrets' values.
+```sh
+# env.sh
+export CLOUDINARY_PRESET="my-preset"
+
+# the rest of your secrets here
+```
+
+then source it from 
 ## Copyright
 © 2026 Fxtressia - All Rights Reserved.
 

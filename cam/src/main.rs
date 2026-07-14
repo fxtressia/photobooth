@@ -3,10 +3,12 @@ pub mod uploader_processer;
 pub mod ws;
 use std::sync::{
     Arc,
-    atomic::{AtomicBool, AtomicU8, Ordering},
+    atomic::{ AtomicU8, Ordering},
 };
 
 use egui_alignments::{center_horizontal, center_vertical};
+pub mod utils;
+
 
 use eframe::egui::{self, ViewportCommand};
 use egui::{ColorImage, TextureHandle, TextureOptions};
@@ -16,6 +18,10 @@ use tokio::runtime::Runtime;
 
 use crate::ws::Session;
 fn main() -> eframe::Result {
+    let env = ws::Env {
+        pusher_ws_region: std::env::var("PUSHER_WS_REGION").expect("PUSHER_WS_REGION is not found"),
+        pusher_ws_key: std::env::var("PUSHER_WS_KEY").expect("PUSHER_WS_KEY is not found"),
+    };
     gstreamer::init().unwrap();
 
     env_logger::init(); // Log to stderr (if you run with `RUST_LOG=debug`).
@@ -42,18 +48,19 @@ fn main() -> eframe::Result {
     let rt = Runtime::new().expect("Failed to create Tokio runtime");
     let handle = rt.handle().clone();
     let client = reqwest::Client::new();
-    let client2 = client.clone();
+    let clients = (client.clone(), client.clone());
     std::thread::spawn(move || {
         rt.block_on(async {
             std::future::pending::<()>().await;
         });
     });
+
     let camstates = (camera_state.clone(), camera_state.clone());
     handle.spawn(async move {
         feed::start(tx, camstates.0, sessions.0, tx_upload).await;
     });
     handle.spawn(async move {
-        ws::start(tx_ws, config2, sessions.1, client2).await;
+        ws::start(tx_ws, config2, sessions.1, clients.0, env).await;
     });
     handle.spawn(async move {
         uploader_processer::start(rx_upload, sessions.2, tx_upload2, client, camstates.1).await;

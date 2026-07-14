@@ -2,42 +2,39 @@ use gstreamer::{
     glib::object::Cast,
     prelude::{ElementExt, GstBinExt},
 };
-use std::sync::mpsc::Sender;
+pub use crate::utils::CLOCK_ID;
+use std::sync::{atomic::AtomicI64, mpsc::Sender};
 use gstreamer_video::VideoFrameExt;
 use std::{
     io::BufRead, process::{Child, Stdio}, sync::{
         Arc,
-        atomic::{ AtomicU8, AtomicU64},
-    }, time::{Duration, SystemTime}
+        atomic::{ AtomicU8},
+    }, time::{Duration}
 };
 
-use crate::{CameraState, Frame, uploader_processer, ws::InfiniteOrFinite};
+use crate::{CameraState, Frame, uploader_processer, utils::timespec_to_secs, };
 
-
-
-
-#[cfg(target_os = "linux")]
-const CLOCK_ID: rustix::io_uring::ClockId = rustix::io_uring::ClockId::MonotonicRaw;
-#[cfg(not(target_os = "linux"))]
-const CLOCK_ID: rustix::io_uring::ClockId = rustix::io_uring::ClockId::Monotonic;
 pub async fn start(tx: Sender<Frame>, state: Arc<AtomicU8>, session: Arc<std::sync::Mutex<Option<crate::ws::Session>>>, tx_uploader: tokio::sync::mpsc::Sender<uploader_processer::Event>) {
-
         let is_camera_disabled = std::env::var("DISABLE_CAMERA").is_ok();
-        let last_watchdog_reset = Arc::new(AtomicU64::new(0));
+        let last_watchdog_reset = Arc::new(AtomicI64::new(0));
         let mut gphoto2_server: Option<Child> = None;
         let mut gstreamer_server: Option<Child> = None;
         let mut duration_left = None;
     loop {
         let mut start = None;
-        if state.load(std::sync::atomic::Ordering::Relaxed) == (CameraState::LiveView as u8) {
+        if let Err(err) = (|| -> anyhow::Result<()>{if state.load(std::sync::atomic::Ordering::Relaxed) == (CameraState::LiveView as u8) {
             if let None = duration_left {
-                duration_left = Some(session.lock().unwrap().as_ref().map(|s| s.tier.limits.max_minutes.clone().map(|m| rustix::time::Timespec::try_from(Duration::new(u64::from(m) * 60, 0)).unwrap())).unwrap());
+                duration_left = Some(session.lock().map_err(|err| anyhow::anyhow!("PoisonError: {err:#?}"))?.as_ref().map(|s| s.tier.limits.max_minutes.as_ref().map(|m| rustix::time::Timespec::try_from(Duration::new(u64::from(*m) * 60, 0)).unwrap())).unwrap());
             }
             start = Some(rustix::time::clock_gettime(CLOCK_ID));
+            
         }
+        Ok(())})() {
+            println!("{err}")
+        };
         
         let res = feed(&tx, &state, &session, is_camera_disabled, last_watchdog_reset.clone(), &mut gphoto2_server, &mut gstreamer_server, &tx_uploader).await;
-        if let Some(InfiniteOrFinite::Finite(duration)) = duration_left {
+        if let Some(Some(duration)) = duration_left {
             if let Some(start_time) = start {
                 let end = rustix::time::clock_gettime(CLOCK_ID);
                 let elapsed = end.checked_sub(start_time).unwrap_or(rustix::time::Timespec { 
@@ -47,12 +44,12 @@ pub async fn start(tx: Sender<Frame>, state: Arc<AtomicU8>, session: Arc<std::sy
                 
                 if elapsed >= duration {
                     println!("Duration limit reached, shutting down...");
-                   
+                    
                     state.store(CameraState::Finished as u8, std::sync::atomic::Ordering::Relaxed);
                     session.lock().unwrap().take();
                     break;
                 } else {
-                    duration_left = Some(InfiniteOrFinite::Finite(duration.checked_sub(elapsed).unwrap_or(rustix::time::Timespec { 
+                    duration_left = Some(Some(duration.checked_sub(elapsed).unwrap_or(rustix::time::Timespec { 
                         tv_sec: 0, 
                         tv_nsec: 0
                     })));
@@ -70,16 +67,16 @@ pub async fn start(tx: Sender<Frame>, state: Arc<AtomicU8>, session: Arc<std::sy
             }
             Err(e) => {
                 eprintln!("Error in feed: {}", e);
-                std::thread::sleep(Duration::from_secs(2));
+                tokio::time::sleep(Duration::from_secs(2)).await;
             }
         }
     }
 }
-pub async fn feed(tx: &Sender<Frame>, state: &Arc<AtomicU8>, _session: &Arc<std::sync::Mutex<Option<crate::ws::Session>>>, is_camera_disabled: bool, last_watchdog_reset: Arc<AtomicU64>, gphoto2_server: &mut Option<Child>, gstreamer_server: &mut Option<Child>, tx_uploader: &tokio::sync::mpsc::Sender<uploader_processer::Event>) -> anyhow::Result<bool> {
-   
+
+pub async fn feed(tx: &Sender<Frame>, state: &Arc<AtomicU8>, _session: &Arc<std::sync::Mutex<Option<crate::ws::Session>>>, is_camera_disabled: bool, last_watchdog_reset: Arc<AtomicI64>, gphoto2_server: &mut Option<Child>, gstreamer_server: &mut Option<Child>, tx_uploader: &tokio::sync::mpsc::Sender<uploader_processer::Event>) -> anyhow::Result<bool> {
             match CameraState::from(state.load(std::sync::atomic::Ordering::Relaxed)) {
                 CameraState::Capturing => {
-                    std::thread::sleep(Duration::from_secs(1));
+                    tokio::time::sleep(Duration::from_secs(1)).await;
                     let output = std::process::Command::new("gphoto2")
                         .arg("--capture-image-and-download")
                         .arg("--stdout")
@@ -131,8 +128,8 @@ pub async fn feed(tx: &Sender<Frame>, state: &Arc<AtomicU8>, _session: &Arc<std:
                             if line.contains("Capturing preview frames as movie to 'stdout'. Press Ctrl-C to abort.") {
                                 println!("Launching client pipeline");
                                 
-                            std::thread::sleep(std::time::Duration::from_secs(3));
-                                break;
+                            tokio::time::sleep(std::time::Duration::from_secs(3)).await;
+                            break;
                             }
                           
                         }
@@ -149,7 +146,7 @@ pub async fn feed(tx: &Sender<Frame>, state: &Arc<AtomicU8>, _session: &Arc<std:
                             if let Ok(pipeline) = element.downcast::<gstreamer::Pipeline>() {
                                 pipeline
                             } else {
-                                std::thread::sleep(std::time::Duration::from_secs(2));
+                                tokio::time::sleep(std::time::Duration::from_secs(2)).await;
                                 return Ok(true);
                             }
                         }
@@ -157,7 +154,7 @@ pub async fn feed(tx: &Sender<Frame>, state: &Arc<AtomicU8>, _session: &Arc<std:
                             let pipeline = format!("Failed to create pipeline: {e:#?}");
 
                             eprintln!("{}", pipeline);
-                            std::thread::sleep(std::time::Duration::from_secs(2));
+                            tokio::time::sleep(std::time::Duration::from_secs(2)).await;
                             anyhow::bail!(pipeline);
                         }
                     };
@@ -226,22 +223,28 @@ pub async fn feed(tx: &Sender<Frame>, state: &Arc<AtomicU8>, _session: &Arc<std:
                         }).is_err() {
                             return Err(gstreamer::FlowError::Error);
                         }
-                        watchdog_reset_clone.store(SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_secs() as u64, std::sync::atomic::Ordering::Relaxed);
+                        watchdog_reset_clone.store(
+                       timespec_to_secs(
+                            rustix::time::clock_gettime(CLOCK_ID)
+                       )
+                            ,
+                        std::sync::atomic::Ordering::Relaxed,
+                    );
                         Ok(gstreamer::FlowSuccess::Ok)
                     })
                     .build(),
             );
                     if let Err(e) = pipeline.set_state(gstreamer::State::Playing) {
                         println!("playing is err 99 {e:#?}");
-                        std::thread::sleep(std::time::Duration::from_secs(2));
+                        tokio::time::sleep(std::time::Duration::from_secs(2)).await;
                         let _ = pipeline.set_state(gstreamer::State::Null);
                         return Ok(true);
                     }
                     last_watchdog_reset.store(
-                        SystemTime::now()
-                            .duration_since(SystemTime::UNIX_EPOCH)
-                            .unwrap()
-                            .as_secs() as u64,
+                       timespec_to_secs(
+                            rustix::time::clock_gettime(CLOCK_ID)
+                       )
+                            ,
                         std::sync::atomic::Ordering::Relaxed,
                     );
                     let bus = pipeline.bus().unwrap();
@@ -260,10 +263,7 @@ pub async fn feed(tx: &Sender<Frame>, state: &Arc<AtomicU8>, _session: &Arc<std:
                             }
                         }
 
-                        let now = SystemTime::now()
-                            .duration_since(SystemTime::UNIX_EPOCH)
-                            .unwrap()
-                            .as_secs() as u64;
+                        let now = timespec_to_secs(rustix::time::clock_gettime(CLOCK_ID));
                         let last_reset =
                             last_watchdog_reset.load(std::sync::atomic::Ordering::Relaxed);
                         if now.saturating_sub(last_reset) > 3 {
@@ -280,7 +280,7 @@ pub async fn feed(tx: &Sender<Frame>, state: &Arc<AtomicU8>, _session: &Arc<std:
 
                     let _ = pipeline.set_state(gstreamer::State::Null);
 
-                    std::thread::sleep(Duration::from_secs(2));
+                    tokio::time::sleep(Duration::from_secs(2)).await;
                 }
                 CameraState::Shutdown => {
                     if let Some(mut server) = gphoto2_server.take() {

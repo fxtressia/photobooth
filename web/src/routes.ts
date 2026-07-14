@@ -33,7 +33,31 @@ export default [{
         } */
         { index: true, lazy: { Component: async () => (await import("~/views/Home")).default, loader: async () => (await import("~/views/Home")).homeLoader } },
         { path: "faq", lazy: { Component: async () => (await import("~/views/Faq")).default } },
-        { path: "admin", lazy: { Component: async () => (await import("~/views/Admin")).default, loader: async () => (await import("~/views/Admin")).adminLoader } },
+        {
+            path: "admin",
+            lazy: {
+                Component: async () => (await import("~/views/Admin")).default, loader: async () => (await import("~/views/Admin")).adminSessionsLoader
+            },
+            children: [
+                {
+                    index: true,
+                    lazy: { Component: async () => (await import("~/views/Admin/Sessions")).default, loader: async () => (await import("~/views/Admin")).adminSessionsLoader }
+                },
+                {
+                    path: "venues",
+                    lazy: { Component: async () => (await import("~/views/Admin/Venues")).default, loader: async () => (await import("~/views/Admin")).adminVenuesLoader }
+                },
+                {
+                    path: "tiers",
+                    lazy: {
+                        Component: async () => ((await import("~/views/Admin/Tiers")).default)
+                    }
+                },
+                {
+                    path: "config"
+                }
+            ],
+        },
         { path: "pay", lazy: { Component: async () => (await import("~/views/Payment")).default, loader: async () => (await import("~/views/Payment")).paymentLoader } }
     ]
 },

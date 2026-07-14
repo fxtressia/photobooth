@@ -1,15 +1,16 @@
-use std::sync::Arc;
+use std::{sync::Arc, time::Duration};
 
 use futures_util::{SinkExt, StreamExt};
 
 use reqwest::Client;
+use rustix::fs::Timespec;
 use serde::{Deserialize, Serialize};
 use tokio_tungstenite::{
     connect_async,
     tungstenite::{Message, protocol::frame::coding::CloseCode},
 };
 
-use crate::VenueConfig;
+use crate::{VenueConfig, utils::CLOCK_ID};
 
 #[derive(Deserialize, Serialize)]
 pub struct User {
@@ -60,26 +61,11 @@ pub struct PusherConnectionEstablished {
     pub activity_timeout: usize,
 }
 
-#[derive(Deserialize, Serialize, Clone, PartialEq, PartialOrd, Eq, Ord)]
-pub enum InfiniteOrFinite<U: Clone> {
-    Infinite,
-    Finite(U),
-}
-
-impl<U: Clone + Copy> InfiniteOrFinite<U> {
-    pub fn map<F: FnOnce(U) -> X, X: Clone + Copy>(self, f: F) -> InfiniteOrFinite<X> {
-        match self {
-            InfiniteOrFinite::Infinite => InfiniteOrFinite::Infinite,
-            InfiniteOrFinite::Finite(value) => InfiniteOrFinite::Finite(f(value)),
-        }
-    }
-}
-
 #[derive(Deserialize, Serialize)]
 pub struct Limits {
-    pub max_minutes: InfiniteOrFinite<u8>,
-    pub max_photos: InfiniteOrFinite<u8>,
-    pub max_total_size: InfiniteOrFinite<usize>,
+    pub max_minutes: Option<u8>,
+    pub max_photos: Option<u8>,
+    pub max_total_size: Option<usize>,
     pub auto_click: Option<u8>,
 }
 
@@ -101,7 +87,7 @@ pub enum Event {
 
 #[derive(Clone)]
 pub struct Env {
-    pub pusher_ws_host: String,
+    pub pusher_ws_region: String,
     pub pusher_ws_key: String,
 }
 /// Returns whether the websocket connection needs to be restarted
@@ -112,11 +98,13 @@ pub async fn websocket(
     env: Env,
     client: &Client,
 ) -> anyhow::Result<bool> {
-    let (ws_stream, _) = connect_async(format!(
-        "wss://{}/app/{}?protocol=7&client=linux-photobooth",
-        env.pusher_ws_host, env.pusher_ws_key,
-    ))
-    .await?;
+    let url = format!(
+        "wss://ws-{}.pusher.com/app/{}?protocol=7&client=linux-photobooth",
+        env.pusher_ws_region, env.pusher_ws_key,
+    );
+    let (ws_stream, _) = connect_async(&url)
+        .await
+        .map_err(|err| anyhow::anyhow!("Failed connecting with {url}:\n{err:?}"))?;
 
     tx.send(Event::Connected)?;
     let (mut write, mut read) = ws_stream.split();
@@ -154,7 +142,7 @@ pub async fn websocket(
                 let data: PusherConnectionEstablished = serde_json::from_str(&event.data)?;
 
                 let res = client
-                    .post(format!("https://{}/api/venue/auth?socket_id={}", std::env::var("BACKEND_API_HOST")
+                    .post(format!("{}/api/venue/auth?socket_id={}", std::env::var("BACKEND_API_HOST")
             .expect("Tip: BACKEND_API_HOST is required to be present. Have you set it up?"), data.socket_id))
                     .header("Authorization", format!("Bearer {}", std::env::var("BACKEND_API_KEY").expect("Tip: BACKEND_API_KEY is required to be present. Have you set it up?"),))
                     .send()
@@ -214,16 +202,40 @@ pub async fn start(
     config: Arc<std::sync::Mutex<Option<VenueConfig>>>,
     session: Arc<std::sync::Mutex<Option<Session>>>,
     client: Client,
+    env: Env,
 ) {
-    let env = Env {
-        pusher_ws_host: std::env::var("PUSHER_WS_HOST").expect("tip: PUSHER_WS_HOST is not found"),
-        pusher_ws_key: std::env::var("PUSHER_WS_KEY").expect("tip: PUSHER_WS_KEY is not found"),
+    let mut retry_delay = Duration::from_secs(1);
+    let max_delay = Duration::from_secs(60);
+    let unstable_limit = Timespec {
+        tv_sec: 15,
+        tv_nsec: 0,
     };
+
     loop {
-        if let Err(e) = websocket(tx.clone(), &config, &session, env.clone(), &client).await {
-            eprintln!("An error happened in the websocket task.\n{}", e);
-        } else {
-            break;
+        let start = rustix::time::clock_gettime(CLOCK_ID);
+        match websocket(tx.clone(), &config, &session, env.clone(), &client).await {
+            Ok(should_continue) => {
+                if !should_continue {
+                    let _ = tx.send(Event::Disconnected);
+                    println!("Clean shutdown");
+                    break;
+                }
+            }
+            Err(e) => {
+                eprintln!("An error happened in the websocket task:\n{}", e);
+            }
         };
+        let end = rustix::time::clock_gettime(CLOCK_ID);
+
+        let _ = tx.send(Event::Disconnected);
+        if let Some(t) = end.checked_sub(start) {
+            if t > unstable_limit {
+                retry_delay = Duration::from_secs(1);
+            }
+        }
+
+        println!("Reconnecting in {} seconds", retry_delay.as_secs());
+        tokio::time::sleep(retry_delay).await;
+        retry_delay = std::cmp::min(max_delay, retry_delay * 2);
     }
 }

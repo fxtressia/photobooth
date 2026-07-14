@@ -10,6 +10,7 @@ import React from "react"
 import { I18nextProvider } from "react-i18next"
 //import { TimerProvider } from "@layerhub-io/use-timer"
 import i18next from "i18next"
+import ToastProvider from "~/providers/ToastProvider"
 import "./translations"
 
 //const engine = new Styletron()
@@ -18,7 +19,8 @@ const Provider = ({ children }: { children: React.ReactNode }) => {
   return (
 
 
-    <I18nextProvider i18n={i18next}>{children}</I18nextProvider>
+    <I18nextProvider i18n={i18next}>
+      <ToastProvider>{children}</ToastProvider></I18nextProvider>
 
 
 

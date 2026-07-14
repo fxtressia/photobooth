@@ -8,7 +8,8 @@ export default defineConfig(({ isSsrBuild }: ConfigEnv) => {
   return {
     server: {
     allowedHosts: [
-        'photobooth-project.tailf2950e.ts.net' // Replace with your exact Funnel domain
+        'photobooth-project.tailf2950e.ts.net' 
+        // Replace with your exact Funnel domain
     ]
   },
     assetsInclude: [path.resolve(__dirname, "./src/assets/**/*"), "./index.html"],

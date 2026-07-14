@@ -1,16 +1,23 @@
 import { Context, Hono } from 'hono'
-
-import { auth0, requiresAuth, getUser, claimEquals } from '@auth0/auth0-hono'
+import { v2 as cloudinary } from "cloudinary"
+import { auth0, requiresAuth, getUser } from '@auth0/auth0-hono'
 import { monotonicFactory } from "ulidx";
 import { admins } from "../config";
 import ssr from './ssr';
 import crypto from "node:crypto";
 import home_feed from './home_feed';
-import adminFeed from './admin_feed';
-import hashAPIKey from './hash_api_key';
-import verifyPusherWebhook from './pusher';
+import { adminSessionsFeed, adminVenuesFeed } from './admin_feed';
 
-const app = new Hono()
+import verifyPusherWebhook from './pusher';
+import authVenue, { generateApiKey } from './venue_auth';
+
+const app = new Hono();
+
+cloudinary.config({
+  api_key: process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET,
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME
+});
 if (typeof globalThis !== 'undefined' && !('document' in globalThis)) {
   Object.defineProperty(globalThis, 'document', {
     get() {
@@ -74,7 +81,9 @@ app.get('/api/me', (c) => {
 
 })
 
-app.get('/api/me/home', home_feed);
+app.get('/api/me/home', async (c: Context) => {
+  return c.json(await home_feed(c));
+});
 
 app.get('/api/me/designs', async (c: Context) => {
   const user = getUser(c);
@@ -151,16 +160,20 @@ app.get('/api/me/sessions', async (c: Context) => {
   return c.json(sessions);
 })
 
+app.use("/api/venue/*", authVenue);
+app.post("/api/venue/finish-session", async (c: Context) => {
+  let data = await c.req.json();
+  await c.env.DB.prepare("update sessions set finished = 1 where id = ?").bind(data.id).run();
+
+  return c.json({ msg: "Done!" });
+})
+
 app.post('/api/venue/auth', async (c: Context) => {
-  let key = c.req.header("Authorization");
-  if (!key || !key.startsWith("Bearer ")) return c.json({ "msg": "unauthorized" }, 401);
-  key = key.slice(7);
   const socketId = c.req.query("socket_id");
   if (!socketId) {
     return c.json({ "msg": "Bad Request" }, 400);
   }
-  const venue = (await c.env.DB.prepare("select * from venues where api_key = ?").bind(hashAPIKey(key)).first());
-  if (!venue) return c.json({ "msg": "venue not found" }, 400);
+  const venue = c.env.venue;
 
   const presence = (() => {
     const channel_data = JSON.stringify({ user_id: venue.id });
@@ -192,6 +205,38 @@ app.post('/api/venue/auth', async (c: Context) => {
   });
 
 })
+
+app.post('/api/webhook/cloudinary/notify', async (c: Context) => {
+  const body = await c.req.text();
+  const signature = c.req.header('x-cld-signature');
+  const timestam = c.req.header('x-cld-timestamp');
+  if (!timestam || !signature) return c.json({ "msg": "unauthorized" }, 401);
+  const timestamp = Number(timestam);
+
+  const isValid = cloudinary.utils.verifyNotificationSignature(body, timestamp, signature);
+
+  if (!isValid) {
+    return c.json({ "msg": "unauthorized" }, 401);
+  }
+
+  const data = await c.req.json();
+  if (data.notification_type == "upload") {
+    // add 
+    //console.log(data);
+    if (typeof data.public_id == "string") {
+      const segments = data.public_id.split("/");
+      const session = segments[4];
+      const user = segments[2];
+      const take = segments[6];
+
+      await c.env.DB.prepare("update sessions set images_taken_count = ? where id = ? and user_auth0_id = ? and images_taken_count < ?").bind(take, session, user, take).run();
+
+
+    };
+  }
+})
+
+
 
 app.post('/api/webhook/pusher/*', verifyPusherWebhook);
 app.post('/api/webhook/pusher/online', async (c: Context) => {
@@ -259,7 +304,7 @@ app.post('/api/me/venue/unlock', async (c: Context) => {
       text: await res.text(),
       pusherStatusText: res.statusText,
       pusherStatusCode: res.status
-      // @ts-expect-error
+      // @ts-expect-error res.status will always be a valid HTTP response code
     }, res.status)
   }
 });
@@ -268,21 +313,54 @@ app.post('/api/me/venue/unlock', async (c: Context) => {
 
 
 app.post('/api/admin/sessions/generate', async (c) => {
-  return c.notFound();
-  /*
-  const user = getUser(c);
  
-  const { location, images_count, tier } = await c.req.json();
+  const { location, tier } = await c.req.json();
   const owner_id = c.req.param("owner_id") ? c.req.param("owner_id") : null;
 
   const id = ulid();
-  await c.env.DB.prepare("insert into sessions (id, user_auth0_id, location, images_count) values (?, ?, ?, ?)").bind(id, owner_id, location, images_count, tier).run();
-  return c.json({ id });*/
+  await c.env.DB.prepare("insert into sessions (id, user_auth0_id, location,  tier) values (?, ?, ?, ?)").bind(id, owner_id, location, tier).run();
+  return c.json({ id });
 })
 
+app.get('/api/admin/venues', adminVenuesFeed);
 
 
-app.get('/api/admin/home', adminFeed);
+app.get('/api/admin/sessions', adminSessionsFeed);
+
+app.post('/api/admin/venues/create', async (c: Context) => {
+  const data = await c.req.json();
+
+  if (!data || !data.name) return c.json({msg: "Bad request"}, 400)
+  const { rawKey, hashedKey } = await generateApiKey();
+  const id = ulid();
+
+  await c.env.DB.prepare("insert into venues (id, hash_api_token, is_online, name) values (?, ?, ?, ?)").bind(id, hashedKey, 0, data.name).run();
+
+  return c.json({ rawKey, name: data.name });
+})
+
+app.post('/api/admin/venues/delete', async (c: Context) => {
+  const data = await c.req.json();
+  await c.env.DB.prepare("delete from venues where id = ?").bind(data.id).run();
+  return c.json({ msg: "OK" });
+})
+
+app.patch('/api/admin/venues/reset-token', async (c: Context) => {
+  const data = await c.req.json();
+  const {rawKey, hashedKey } = await generateApiKey();
+  await c.env.DB.prepare("update venues set hash_api_token = ? where id = ?").bind(hashedKey, data.id).run();
+  return c.json({ rawKey });
+})
+
+app.patch('/api/admin/venues/update', async (c) => {
+  const data = await c.req.json();
+  if (!(data?.name || data?.id)) {
+    return c.json({msg: "Bad Request"}, 400);
+  }
+  await c.env.DB.prepare("update venues set name = ? where id = ?").bind(data.name, data.id).run();
+
+  return c.json({ msg: "OK" });
+})
 app.post('/api/admin/verify-payment', async (c) => {
   const id = c.req.query("id");
   await c.env.DB.prepare("update sessions set authorized = ? where id = ?").bind(1, id).run();
@@ -393,3 +471,6 @@ app.post('/api/me/designs/:id/order', async (c) => {
 app.get('*', ssr)
 
 export default app
+
+
+

@@ -13,7 +13,7 @@ use reqwest::multipart::Form;
 use reqwest::multipart::Part;
 
 use crate::CameraState;
-use crate::ws::InfiniteOrFinite;
+
 use crate::ws::Session;
 use ort::session::{Session as OrtSession, builder::GraphOptimizationLevel};
 use tokio::sync::mpsc::Receiver;
@@ -26,7 +26,8 @@ pub fn init_ort_bg() -> OrtSession {
         .unwrap()
         .with_intra_threads(4)
         .unwrap()
-        .commit_from_file("model.onnx")
+        .commit_from_file(std::env::var("MODNET_LOCATION")
+            .expect("MODNET_LOCATION is not set"))
         .unwrap()
 }
 pub async fn start(
@@ -56,7 +57,7 @@ pub async fn start(
         }
     });
     let mut aborting = None;
-     let mut total_bytes: usize = 0;
+    let mut total_bytes: usize = 0;
     loop {
         match uploader_handle(
             &mut rx,
@@ -66,7 +67,7 @@ pub async fn start(
             &client,
             &env,
             &mut aborting,
-            &mut total_bytes
+            &mut total_bytes,
         )
         .await
         {
@@ -138,9 +139,8 @@ pub async fn uploader_handle(
     client: &Client,
     env: &Env,
     aborting: &mut Option<u8>,
-    total_bytes: &mut usize
+    total_bytes: &mut usize,
 ) -> anyhow::Result<bool> {
-   
     let event = match rx.recv().await {
         Some(event) => event,
         None => return Ok(false),
@@ -168,9 +168,9 @@ pub async fn uploader_handle(
                         "/users/{}/sessions/{}/take/{}",
                         session.user.auth0_id, session.id, image.nth
                     ),
-                    if InfiniteOrFinite::Finite(image.nth) > *photos_max {
+                    if Some(image.nth) > *photos_max {
                         Some(LimitReached::MaxPhotos(image.nth))
-                    } else if InfiniteOrFinite::Finite(*total_bytes) > *photos_max_size {
+                    } else if Some(*total_bytes) > *photos_max_size {
                         Some(LimitReached::MaxTotalSize(*total_bytes))
                     } else {
                         None

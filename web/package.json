@@ -3,11 +3,11 @@
   "type": "module",
   "scripts": {
     "dev": "vite --port 8787 --host 127.0.0.1",
-    "build": "tsc -b && vite build",
+    "build": "vite build",
     "lint": "eslint .",
     "": "vite preview",
     "cf:dev": "wrangler dev",
-    "cf:deploy": "wrangler deploy --minify",
+    "cf:deploy": "wrangler deploy --env prod --minify",
     "type-gen": "wrangler types --env-interface CloudflareBindings",
     "type-check": "pnpm run type-gen && tsc --noEmit"
   },
@@ -24,6 +24,7 @@
     "are-passive-events-supported": "^1.1.1",
     "axios": "^0.27.2",
     "baseui": "^18.1.0",
+    "cloudinary": "^2.10.0",
     "fuse.js": "^7.4.2",
     "hono": "^4.12.25",
     "i18next": "^21.8.13",

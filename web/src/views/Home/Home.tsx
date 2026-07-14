@@ -7,8 +7,14 @@ import { useEffect, useState } from "react";
 const Home = () => {
     const data = useLoaderData();
     const [selectedSession, setSelectedSession] = useState<string | null>(null);
+    if (!data){
+        return <div>
+            <h1>Well this is awkward...</h1>
 
-    if (!data.sessions || !data.designs) {
+            The application crashed because the data is not loaded.
+        </div>
+    }
+    if ( !data.sessions || !data.designs) {
 
         return <>
             <h1>{brandName}</h1>
@@ -27,8 +33,14 @@ const Home = () => {
                         (() => {
 
                             if (data.sessions.authorized.length > 0) {
+                                if (data.online_venues.length == 0){
+                                    return <div style={{
+                                        width: "stretch", backgroundColor: "#ab3a23", borderRadius: "15px", color: "white", padding: "15px" }}>
+                                        <h2>No booths are online right now. {":<"}</h2>
+                                        <p>Please come back another time. </p>
+                                    </div>
+                                };
                                 useEffect(() => {
-
                                     setSelectedSession(data.sessions.authorized[0].id);
                                 }, []);
                                 return <Link to={selectedSession ? `/me/launch?session=${selectedSession}` : ''} style={{ width: "stretch", backgroundColor: "#93e02e", borderRadius: "15px", color: "white" }}>
@@ -57,7 +69,7 @@ const Home = () => {
                                     })()}
                                 </Link>;
                             } else {
-
+                                return <></>
                             }
 
                         })()
@@ -70,22 +82,24 @@ const Home = () => {
             })()}
         </>
 
-        <div>
+        <div style={{ display: "flex",flexDirection: "column", gap: "15px" }}>
             <h2>Your Designs</h2>
+
             {(() => {
                 if (data.designs.length > 0) {
-                    return <div style={{display: "flex", flexWrap: "wrap", gap: "25px"}}>{data.designs.map((data) => {
-                        console.log(data);
+                    return <div style={{ display: "flex", flexWrap: "wrap", gap: "25px" }}>{data.designs.map((data) => {
+                        // console.log(data);
+                        
                         let [time, setTime] = useState("");
                         useEffect(() => {
                             setTime((new Date(data.created_at * 1000)).toString())
                         })
-                        return (<Link target="_blank"  key={data.id} style={{ padding: "15px", color: "white", borderRadius: "25px", backgroundColor: "#ab6323"}} to={`/edit?design=${data.id}`}>
+                        return (<Link target="_blank" key={data.id} style={{ padding: "15px", color: "white", borderRadius: "25px", backgroundColor: "#ab6323" }} to={`/edit?design=${data.id}`}>
                             <h3>
                                 {data.name || "Untitled Design"}
                             </h3>
                             {time}
-                            
+
                         </Link>)
                     })}</div>
                 } else {

@@ -195,6 +195,9 @@ impl eframe::App for App {
 
 impl App {
     fn ui(&mut self, ui: &mut egui::Ui) {
+        if self.kiosk && !ui.ctx().input(|i| i.viewport().fullscreen.unwrap_or(false)) {
+            ui.send_viewport_cmd(ViewportCommand::Fullscreen(true));
+        }
         center_horizontal(ui, |ui| {
             center_vertical(ui, |ui| {
                 let state = self
@@ -269,7 +272,14 @@ impl App {
                         }
                     }
                     CameraState::LoggedInHome => {
-                        ui.label("Logged In Home");
+                        ui.label("Make sure you are ready!");
+
+                        if ui.add(egui::Button::new("Start")).clicked() {
+                            self.camera_state.store(
+                                CameraState::LiveView as u8,
+                                std::sync::atomic::Ordering::Relaxed,
+                            );
+                        }
                     }
                 }
                 ui.label("Photobooth Project");

@@ -12,13 +12,18 @@ const Home = () => {
     const [launchedVenue, setLaunchedVenue] = useState<VenueData | null>(null);
     const { setToast } = useToast();
     useEffect(() => {
-        setSelectedSession(data.sessions.authorized[0].id);
-    }, [data.sessions.authorized]);
+        let id = data?.sessions?.authorized[0]?.id;
+        if (id){
+            setSelectedSession(data.sessions.authorized[0].id);
+        }
+    }, []);
     if (!data) {
         return <div>
-            <h1>Well this is awkward...</h1>
+            <h1>Loading...</h1>
 
-            The application crashed because the data is not loaded.
+            <p>If this goes on forever, there might be a problem</p>
+            <p>In that case, logging out and in might help.</p>
+            <a href="/auth/logout" style={{ color: "white", display: "flex", justifyContent: "center", alignItems: "center", flexDirection: "column", borderRadius: "15px", padding: "50px", width: "stretch", backgroundColor: "#71ab23" }}><h2>Logout</h2></a>
         </div>
     }
 
@@ -86,19 +91,14 @@ const Home = () => {
 
                                         </Link>)
                                     }
-                                    {(() => {
-                                        if (selectedSession) {
-
-
-                                            return <a href="#sessions" style={{ color: "white", padding: "15px", backgroundColor: "#659f19", borderRadius: " 0 0 15px 15px", display: "flex", flexWrap: "wrap", gap: "5px" }}>
+                                    <a href="#sessions" style={{ color: "white", padding: "15px", backgroundColor: "#659f19", borderRadius: " 0 0 15px 15px", display: "flex", flexWrap: "wrap", gap: "5px" }}>
 
                                                 <p>Selected session</p>
-                                                <p>{tiers[data.sessions.authorized.find((s) => s.id == selectedSession).tier].name}</p>
+                                                <p>{selectedSession && tiers[data.sessions.authorized.find((s) => s.id == selectedSession).tier].name}</p>
 
 
                                             </a>
-                                        } else { return <></> }
-                                    })()}
+                                    
                                 </div>;
                             } else {
                                 return <></>

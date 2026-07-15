@@ -14,9 +14,27 @@ use egui::{ColorImage, TextureHandle, TextureOptions};
 use serde::{Deserialize, Serialize};
 use std::sync::Mutex;
 use tokio::runtime::Runtime;
+#[macro_use]
+pub mod savage {
+    /// Called the savage macro for a reason.....
+    #[macro_export]
+    macro_rules! savage {
+    ($($child:expr),* )=> {
+        $(
+            if let Some(mut child) = $child.take() {
+                let _ = child.kill();
+                let _ = child.wait().await;
+            }
+        )*
+    }
+}
+}
 
 use crate::ws::Session;
 fn main() -> eframe::Result {
+    let camera_test = std::env::var("ENABLE_CAMERA_TEST")
+        .map(|v| v == "1")
+        .unwrap_or(false);
     let kiosk = std::env::var("ENABLE_KIOSK")
         .map(|v| v == "1")
         .unwrap_or(false);
@@ -43,7 +61,11 @@ fn main() -> eframe::Result {
     let (tx_ws, rx_ws) = std::sync::mpsc::channel::<ws::Event>();
     let (tx_upload, rx_upload) = tokio::sync::mpsc::channel::<uploader_processer::Event>(8);
     let tx_upload2 = tx_upload.clone();
-    let camera_state = Arc::new(AtomicU8::new(CameraState::Welcome as u8));
+    let camera_state = Arc::new(AtomicU8::new(if camera_test {
+        CameraState::LiveView
+    } else {
+        CameraState::Welcome
+    } as u8));
 
     let session = Arc::new(Mutex::new(None));
     let sessions = (session.clone(), session.clone(), session.clone());
@@ -61,12 +83,15 @@ fn main() -> eframe::Result {
     handle.spawn(async move {
         feed::start(tx, camstates.0, sessions.0, tx_upload).await;
     });
-    handle.spawn(async move {
-        ws::start(tx_ws, config2, sessions.1, clients.0, env).await;
-    });
-    handle.spawn(async move {
-        uploader_processer::start(rx_upload, sessions.2, tx_upload2, client, camstates.1).await;
-    });
+    if !camera_test {
+        handle.spawn(async move {
+            ws::start(tx_ws, config2, sessions.1, clients.0, env).await;
+        });
+        handle.spawn(async move {
+            uploader_processer::start(rx_upload, sessions.2, tx_upload2, client, camstates.1).await;
+        });
+    }
+
     eframe::run_native(
         "Photobooth Cam", // unused title
         options,
@@ -74,6 +99,7 @@ fn main() -> eframe::Result {
             Ok(Box::new(App {
                 camera_texture: None,
                 rx,
+                camera_test,
                 rx_ws,
                 kiosk,
                 camera_state,
@@ -128,6 +154,7 @@ struct App {
     pub camera_texture: Option<TextureHandle>,
     pub camera_state: Arc<AtomicU8>,
     pub kiosk: bool,
+    pub camera_test: bool,
     pub config: Arc<std::sync::Mutex<Option<VenueConfig>>>,
     pub session: Arc<Mutex<Option<Session>>>,
     //  pub camera_width: usize,
